@@ -1,0 +1,51 @@
+{
+  "graphics": {
+    "window_width": 1280,
+    "window_height": 720,
+    "fullscreen": false,
+    "vsync": true,
+    "max_fps": 60,
+    "msaa_samples": 4,
+    "shadow_resolution": 2048,
+    "max_anisotropy": 16.0,
+    "lod_bias": 0.0,
+    "texture_streaming_budget_mb": 512,
+    "backend": "dx11",
+    "enable_validation": false
+  },
+  "physics": {
+    "substeps": 4,
+    "gravity": [0.0, -9.81, 0.0],
+    "solver_iterations": 8,
+    "contact_offset": 0.01,
+    "rest_offset": 0.0,
+    "max_depenetration_velocity": 100.0,
+    "enable_ccd": true,
+    "thread_count": 4,
+    "async_physics": true
+  },
+  "world": {
+    "chunk_size": 64,
+    "render_distance": 10,
+    "terrainlod_distances": [50.0, 100.0, 200.0, 500.0],
+    "max_entities": 10000,
+    "streaming_enabled": true,
+    "save_directory": "saves"
+  },
+  "input": {
+    "mouse_sensitivity": 1.0,
+    "invert_y": false,
+    "gamepad_enabled": true,
+    "vibration_enabled": true,
+    "vibration_strength": 0.5
+  },
+  "audio": {
+    "master_volume": 1.0,
+    "music_volume": 0.8,
+    "sfx_volume": 1.0,
+    "voice_volume": 1.0,
+    "environmental_audio": true,
+    "doppler_effect": true,
+    "max_audio_sources": 32
+  }
+}

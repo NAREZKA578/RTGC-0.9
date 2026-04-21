@@ -1,0 +1,42 @@
+pub mod assets;
+pub mod audio;
+pub mod config;
+pub mod ecs;
+pub use ecs::job_system::*;
+pub mod error;
+pub mod graphics;
+pub mod input;
+pub mod physics;
+pub mod ui;
+pub mod profiler;
+pub mod engine;
+pub mod world;
+pub mod game;
+pub mod network;
+pub mod utils;
+pub mod weather;
+pub mod core_api;
+
+// Core engine types re-export
+pub use nalgebra;
+pub use winit;
+
+// Re-export engine subsystems for easier access
+pub use engine::subsystems::{
+    EngineSubsystems,
+    GraphicsSubsystem,
+    PhysicsSubsystem,
+    UISubsystem,
+    WorldSubsystem,
+};
+
+// Re-export engine state types
+pub use engine::state::{
+    EngineState,
+    MenuState,
+    LoadingResourceType,
+    PauseReason,
+};
+
+// Re-export core_api module
+pub use core_api::{CoreResult, run as run_engine, create_engine};

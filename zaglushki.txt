@@ -1,0 +1,15 @@
+C:\Users\mrkri\Documents\RTGC-0.8\src\graphics\dx11_context.rs:1: //! DirectX 11 Context - stub
+C:\Users\mrkri\Documents\RTGC-0.8\src\graphics\rhi\dx11\context_dx11.rs:1: //! DirectX 11 Context - Stub
+C:\Users\mrkri\Documents\RTGC-0.8\src\graphics\rhi\dx11\swapchain_dx11.rs:1: //! DirectX 11 SwapChain - stub
+C:\Users\mrkri\Documents\RTGC-0.8\src\graphics\rhi\dx11\buffer_dx11.rs:1: //! DirectX 11 Buffer - stub
+C:\Users\mrkri\Documents\RTGC-0.8\src\graphics\rhi\dx11\shader_dx11.rs:1: //! DirectX 11 Shader - stub
+C:\Users\mrkri\Documents\RTGC-0.8\src\graphics\rhi\dx11\mod.rs:1: //! DirectX 11 Backend - Stubs (DX11 реально не работает без переписывания RHI)
+C:\Users\mrkri\Documents\RTGC-0.8\src\graphics\renderer_dx11.rs:1: //! DX11 Renderer - stub
+C:\Users\mrkri\Documents\RTGC-0.8\src\graphics\rhi\dx11\pipeline_dx11.rs:1: //! DirectX 11 Pipeline (stub)
+C:\Users\mrkri\Documents\RTGC-0.8\src\graphics\rhi\dx11\texture_dx11.rs:1: //! DirectX 11 Texture (stub)
+C:\Users\mrkri\Documents\RTGC-0.8\src\graphics\rhi\vulkan\swapchain_vk.rs:393:         // This is a stub - actual cleanup requires device reference
+C:\Users\mrkri\Documents\RTGC-0.8\src\graphics\rhi\vulkan\swapchain_vk.rs:442:             // This is a stub - actual implementation would need these references
+C:\Users\mrkri\Documents\RTGC-0.8\src\graphics\rhi\dx12\command_dx12.rs:815: /// This is a stub implementation for the RHI interface. In production, proper lifecycle
+C:\Users\mrkri\Documents\RTGC-0.8\src\audio\engine.rs:280:     /// Stub for OGG loading (returns error with helpful message)
+C:\Users\mrkri\Documents\RTGC-0.8\src\audio\engine.rs:285:     /// Stub for MP3 loading (returns error with helpful message)
+C:\Users\mrkri\Documents\RTGC-0.8\src\game\scenes\open_world.rs:34:         // Terrain generation stub - can be expanded with proper implementation
