@@ -1,0 +1,181 @@
+//! Главный модуль Renderer - координирует рендеринг сцены, UI и отладки
+//! 
+//! Использует RHI для абстракции над графическим бэкендом
+
+use crate::graphics::rhi::{IDevice, ICommandQueue, ISwapChain, ResourceHandle};
+use crate::graphics::renderer::{
+    SceneRenderer, UIRenderer, DebugRenderer, PipelineCache,
+    MainRenderPass, ShadowRenderPass, PostProcessRenderPass,
+    RenderCommand, UiCommand, RendererConfig,
+};
+use crate::graphics::camera::Camera;
+use std::sync::Arc;
+
+/// Основной Renderer
+pub struct Renderer {
+    device: Arc<dyn IDevice>,
+    command_queue: Arc<dyn ICommandQueue>,
+    swap_chain: Arc<dyn ISwapChain>,
+    
+    // Под-рендереры
+    scene_renderer: SceneRenderer,
+    ui_renderer: UIRenderer,
+    debug_renderer: DebugRenderer,
+    
+    // Кэш пайплайнов
+    pipeline_cache: PipelineCache,
+    
+    // Render passes
+    main_pass: Option<MainRenderPass>,
+    shadow_pass: Option<ShadowRenderPass>,
+    post_process_pass: Option<PostProcessRenderPass>,
+    
+    // Камера
+    camera: Camera,
+    
+    // Размеры экрана
+    width: u32,
+    height: u32,
+    
+    // Состояние
+    debug_mode: bool,
+    vsync: bool,
+}
+
+impl Renderer {
+    /// Создаёт новый рендерер
+    pub fn new(
+        device: Arc<dyn IDevice>,
+        command_queue: Arc<dyn ICommandQueue>,
+        swap_chain: Arc<dyn ISwapChain>,
+        config: &RendererConfig,
+    ) -> Result<Self, String> {
+        let width = config.width;
+        let height = config.height;
+        
+        // Создаём под-рендереры
+        let scene_renderer = SceneRenderer::new(device.clone());
+        let ui_renderer = UIRenderer::new(device.clone());
+        let debug_renderer = DebugRenderer::new(device.clone());
+        
+        let mut renderer = Self {
+            device,
+            command_queue,
+            swap_chain,
+            scene_renderer,
+            ui_renderer,
+            debug_renderer,
+            pipeline_cache: PipelineCache::new(),
+            main_pass: None,
+            shadow_pass: None,
+            post_process_pass: None,
+            camera: Camera::default(),
+            width,
+            height,
+            debug_mode: config.debug_mode,
+            vsync: config.vsync,
+        };
+        
+        // Инициализируем под-рендереры
+        renderer.scene_renderer.initialize()?;
+        renderer.ui_renderer.initialize()?;
+        renderer.debug_renderer.initialize()?;
+        
+        // Обновляем орто-матрицу UI
+        renderer.ui_renderer.update_ortho_matrix(width, height);
+        
+        Ok(renderer)
+    }
+    
+    /// Начинает кадр
+    pub fn begin_frame(&mut self) -> Result<(), String> {
+        // Очищаем накопленные команды в под-рендерерах
+        self.debug_renderer.clear();
+        self.ui_renderer.clear();
+        
+        Ok(())
+    }
+    
+    /// Рендерит сцену
+    pub fn render_scene(&mut self, commands: &[RenderCommand]) -> Result<(), String> {
+        self.scene_renderer.render(&self.camera, commands)?;
+        Ok(())
+    }
+    
+    /// Рендерит UI
+    pub fn render_ui(&mut self, commands: &[UiCommand]) -> Result<(), String> {
+        self.ui_renderer.render(commands, (self.width, self.height))?;
+        Ok(())
+    }
+    
+    /// Рендерит отладочную информацию
+    pub fn render_debug(&mut self) -> Result<(), String> {
+        // Debug rendering будет вызван внутри render_scene или отдельно
+        Ok(())
+    }
+    
+    /// Завершает кадр
+    pub fn end_frame(&mut self) -> Result<(), String> {
+        // Present через swap chain
+        self.swap_chain.present()
+            .map_err(|e| format!("Failed to present: {:?}", e))?;
+        
+        Ok(())
+    }
+    
+    /// Обрабатывает изменение размера окна
+    pub fn resize(&mut self, width: u32, height: u32) {
+        self.width = width.max(1);
+        self.height = height.max(1);
+        
+        // Обновляем камеру
+        self.camera.update_aspect(self.width as f32, self.height as f32);
+        
+        // Обновляем UI орто-матрицу
+        self.ui_renderer.update_ortho_matrix(self.width, self.height);
+        
+        // Пересоздаём swap chain и render passes при необходимости
+        // TODO: resize swap chain
+    }
+    
+    /// Устанавливает камеру
+    pub fn set_camera(&mut self, camera: Camera) {
+        self.camera = camera;
+    }
+    
+    /// Получает ссылку на камеру
+    pub fn camera(&self) -> &Camera {
+        &self.camera
+    }
+    
+    /// Получает мутабельную ссылку на камеру
+    pub fn camera_mut(&mut self) -> &mut Camera {
+        &mut self.camera
+    }
+    
+    /// Устанавливает режим отладки
+    pub fn set_debug_mode(&mut self, enabled: bool) {
+        self.debug_mode = enabled;
+    }
+    
+    /// Проверяет режим отладки
+    pub fn is_debug_mode(&self) -> bool {
+        self.debug_mode
+    }
+    
+    /// Получает ширину экрана
+    pub fn width(&self) -> u32 {
+        self.width
+    }
+    
+    /// Получает высоту экрана
+    pub fn height(&self) -> u32 {
+        self.height
+    }
+    
+    /// Получает статистику pipeline cache
+    pub fn pipeline_cache_stats(&self) -> crate::graphics::renderer::PipelineCacheStats {
+        // Пока заглушка - нужно добавить поле для статистики
+        crate::graphics::renderer::PipelineCacheStats::default()
+    }
+}

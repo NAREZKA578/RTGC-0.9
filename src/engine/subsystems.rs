@@ -11,7 +11,7 @@ use crate::game::interaction::InteractionSystem;
 use crate::game::loading_manager::LoadingManager;
 use crate::game::save::SaveSystem;
 use crate::game::ui::UIManager;
-use crate::graphics::debug_renderer::DebugRenderer;
+use crate::graphics::renderer::DebugRenderer;
 use crate::graphics::material::MaterialManager;
 use crate::graphics::particles::ParticleSystem;
 use crate::graphics::renderer::Renderer;
