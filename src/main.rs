@@ -1,7 +1,7 @@
 // RTGC-0.8 Main Entry Point - Simple engine runner
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use rtgc::core_api;
+use rtgc::engine::{Engine, EngineConfig};
 use tracing::{error, info};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -28,7 +28,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }));
 
     // Запуск движка через центральный модуль core
-    match core_api::run() {
+    let config = EngineConfig::default();
+    match Engine::run(config) {
         Ok(()) => {
             info!("Engine shutdown successfully");
             Ok(())
