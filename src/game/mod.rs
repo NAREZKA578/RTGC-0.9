@@ -1,7 +1,6 @@
 //! Game Module for RTGC-0.8
 //! Contains gameplay systems: missions, cargo, weather, day/night cycle
 
-pub mod asset_manager;
 pub mod base_builder;
 pub mod cargo;
 pub mod character_creation;
@@ -11,7 +10,6 @@ pub mod events;
 pub mod first_mission;
 pub mod interaction;
 pub mod inventory;
-pub mod loading_manager;
 pub mod main_menu;
 pub mod map_system;
 pub mod mission_generator;
@@ -25,14 +23,10 @@ pub mod skills;
 pub mod storage;
 pub mod ui;
 pub mod vehicle_parts;
-pub mod weather;
 pub mod winch;
 
 pub use crate::network::protocol::PlayerInput;
 pub use crate::physics::LAYER_PLAYER;
-pub use asset_manager::{
-    AssetManager, AssetManagerConfig, AssetManagerStats, AssetMetadata, RefCountedHandle,
-};
 pub use base_builder::{
     BaseBuildingSystem, BaseCapability, BaseType, BuiltStructure, PlayerBase, ResourceRequirements,
     StructureType, GRID_CELL_SIZE, MAX_BASES_PER_PLAYER, MAX_STRUCTURES_PER_BASE,
@@ -57,10 +51,6 @@ pub use interaction::{
 };
 pub use inventory::{
     Inventory, InventoryItem, InventorySlot, ItemType, MAX_INVENTORY_SLOTS, MAX_INVENTORY_WEIGHT,
-};
-pub use loading_manager::{
-    LoadStatus, LoadableResource, LoadingManager, LoadingProgress, LoadingState, LoadingStats,
-    ResourceType,
 };
 pub use main_menu::{MainMenu, MenuAction, MenuButton, MenuRenderData, MenuState};
 pub use map_system::{MapMarker, MapSystem, MarkerType};
@@ -90,5 +80,4 @@ pub use vehicle_parts::{
     PartCategory, PartDiagnostic, VehiclePart, VehiclePartsSystem, MAX_INTEGRITY,
     MIN_FUNCTIONAL_INTEGRITY,
 };
-pub use weather::{DayNightCycle, PrecipitationType, WeatherState, WeatherSystem};
 pub use winch::Winch;

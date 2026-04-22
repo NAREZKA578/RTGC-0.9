@@ -13,7 +13,6 @@
 //! - [`world_manager`] - Управление открытым миром, погодой, миссиями
 //! - [`vehicle_manager`] - Управление транспортными средствами
 //! - [`input_manager`] - Обработка ввода с клавиатуры, мыши и геймпадов
-//! - [`render_manager`] - Рендеринг сцены, UI и пост-обработка
 //! - [`game_loop_manager`] - Основной цикл обновлений игровых систем
 
 pub mod core;
@@ -23,7 +22,6 @@ pub mod physics_manager;
 pub mod world_manager;
 pub mod vehicle_manager;
 pub mod input_manager;
-pub mod render_manager;
 pub mod game_loop_manager;
 
 pub use core::*;
@@ -33,5 +31,4 @@ pub use physics_manager::*;
 pub use world_manager::*;
 pub use vehicle_manager::*;
 pub use input_manager::*;
-pub use render_manager::*;
 pub use game_loop_manager::*;

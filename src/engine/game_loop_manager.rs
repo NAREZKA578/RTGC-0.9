@@ -8,7 +8,7 @@ use crate::game::interaction::InteractionSystem;
 use crate::game::debug_menu::DebugMenu;
 use crate::ui::HudManager;
 use crate::graphics::particles::ParticleSystem;
-use crate::graphics::debug_renderer::DebugRenderer;
+use crate::graphics::renderer::DebugRenderer;
 use nalgebra::Vector3;
 use tracing::{info, warn};
 
