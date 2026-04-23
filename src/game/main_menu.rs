@@ -154,10 +154,9 @@ impl MainMenu {
     
     /// Обновить состояние меню (обработка ввода, анимации)
     pub fn update(&mut self, dt: f32, input: &InputManager) -> Option<MenuAction> {
-        // Обновляем позицию мыши
-        if let Some(pos) = input.get_mouse_position() {
-            self.mouse_position = [pos.0 as f32, pos.1 as f32];
-        }
+        // Обновляем позицию мыши из состояния InputManager
+        let state = input.state();
+        self.mouse_position = [state.mouse_position.0 as f32, state.mouse_position.1 as f32];
         
         // Проверяем hover на кнопках
         for button in &mut self.buttons {
@@ -167,10 +166,11 @@ impl MainMenu {
                 button.size,
             );
             
-            // Проверка нажатия
-            if button.is_hovered && input.is_mouse_button_pressed(0) {
+            // Проверка нажатия (используем левую кнопку мыши - MouseButton::Left)
+            use crate::input::MouseButton;
+            if button.is_hovered && state.is_mouse_button_pressed(MouseButton::Left) {
                 button.is_pressed = true;
-            } else if button.is_pressed && !input.is_mouse_button_down(0) {
+            } else if button.is_pressed && !state.is_mouse_button_down(MouseButton::Left) {
                 // Кнопка отпущена - выполняем действие
                 button.is_pressed = false;
                 if button.is_hovered {
@@ -183,7 +183,7 @@ impl MainMenu {
     }
     
     /// Отрисовка меню
-    pub fn render(&self, ui_commands: &mut Vec<UiCommand>) {
+    pub fn render(&self, ui_commands: &mut Vec<UiCommand>, window_size: [f32; 2]) {
         // Цвета
         let bg_color = [0.1, 0.1, 0.15, 1.0];
         let button_normal = [0.3, 0.3, 0.35, 1.0];
@@ -192,10 +192,10 @@ impl MainMenu {
         let text_color = [1.0, 1.0, 1.0, 1.0];
         let title_color = [0.9, 0.7, 0.2, 1.0];
         
-        // Фон
+        // Фон на весь экран
         ui_commands.push(UiCommand::Rect {
             position: [0.0, 0.0],
-            size: [1920.0, 1080.0],
+            size: window_size,
             color: bg_color,
         });
         
@@ -322,10 +322,18 @@ impl MainMenu {
             && point[1] <= rect_pos[1] + rect_size[1]
     }
     
-    /// Измерить ширину текста (заглушка, пока нет полноценного шрифта)
+    /// Измерить ширину текста с использованием реального шрифта
     fn measure_text_width(&self, text: &str, font_size: f32) -> f32 {
-        // Приблизительная ширина: 0.6 * font_size * количество символов
-        text.len() as f32 * font_size * 0.6
+        if let Some(ref font) = self.font {
+            // Используем реальные метрики шрифта
+            let (width, _) = font.measure_text(text);
+            // Масштабируем относительно размера шрифта
+            let scale = font_size / font.pixel_height;
+            width * scale
+        } else {
+            // Заглушка, если шрифт не установлен
+            text.len() as f32 * font_size * 0.6
+        }
     }
     
     /// Переключить состояние меню

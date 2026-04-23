@@ -2,7 +2,7 @@
 //! 
 //! Поддерживает текстуры, шейдеры, меши, шрифты с кэшированием
 
-use crate::graphics::rhi::{IDevice, ResourceHandle, TextureDescription, TextureFormat, TextureUsage};
+use crate::graphics::rhi::{IDevice, ResourceHandle, TextureDescription, TextureFormat, TextureUsage, TextureType, TextureDimension, ResourceState};
 use crate::graphics::font::FontAtlas;
 use std::collections::HashMap;
 use std::path::Path;
@@ -112,18 +112,25 @@ impl AssetServer {
         
         // Создаём описание текстуры
         let desc = TextureDescription {
+            dimension: TextureDimension::D2,
+            texture_type: TextureType::Texture2D,
             width: width as u32,
             height: height as u32,
             depth: 1,
+            depth_or_array_layers: 1,
             format: TextureFormat::Rgba8Unorm,
-            usage: TextureUsage::SHADER_RESOURCE,
+            usage: TextureUsage::SHADER_READ | TextureUsage::TRANSFER_DST,
+            initial_state: ResourceState::ShaderResource,
             mip_levels: 1,
-            initial_data: Some(rgba.as_ref()),
         };
         
         // Создаём текстуру в RHI
         let handle = self.device.create_texture(&desc)
             .map_err(|e| format!("Failed to create texture: {:?}", e))?;
+        
+        // Загружаем данные в текстуру
+        self.device.update_texture(handle, 0, 0, 0, width as u32, height as u32, 1, rgba.as_ref())
+            .map_err(|e| format!("Failed to update texture: {:?}", e))?;
         
         let loaded = LoadedTexture {
             handle,
@@ -155,17 +162,24 @@ impl AssetServer {
         let atlas_data = atlas.get_atlas_data().to_vec();
         
         let desc = TextureDescription {
+            dimension: TextureDimension::D2,
+            texture_type: TextureType::Texture2D,
             width,
             height,
             depth: 1,
+            depth_or_array_layers: 1,
             format: TextureFormat::Rgba8Unorm,
-            usage: TextureUsage::SHADER_RESOURCE,
+            usage: TextureUsage::SHADER_READ | TextureUsage::TRANSFER_DST,
+            initial_state: ResourceState::ShaderResource,
             mip_levels: 1,
-            initial_data: Some(&atlas_data),
         };
         
         let texture_handle = self.device.create_texture(&desc)
             .map_err(|e| format!("Failed to create font texture: {:?}", e))?;
+        
+        // Загружаем данные в текстуру
+        self.device.update_texture(texture_handle, 0, 0, 0, width, height, 1, &atlas_data)
+            .map_err(|e| format!("Failed to update font texture: {:?}", e))?;
         
         // Сохраняем handle в атласе
         atlas.texture = Some(texture_handle);
