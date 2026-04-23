@@ -6,7 +6,8 @@ use crate::graphics::rhi::{
     IDevice, ICommandList, ResourceHandle, BufferDesc, BufferType, BufferUsage,
     ShaderDescription, ShaderStage, InputLayout, VertexAttribute, VertexFormat,
     PrimitiveTopology, RasterizerState, DepthState, ColorBlendState, BlendOp,
-    BlendFactor, ColorWriteMask, PipelineStateObject,
+    BlendMode, PipelineStateObject, CompareFunc, CullMode, FrontFace, FillMode,
+    StencilState,
 };
 use crate::graphics::renderer::commands::UiCommand;
 use crate::graphics::font::FontAtlas;
@@ -115,28 +116,38 @@ impl UIRenderer {
 
         // 3. Настройка блендинга для прозрачности UI
         let blend_state = ColorBlendState {
-            attachments: vec![crate::graphics::rhi::ColorBlendAttachment {
-                blend_enable: true,
-                src_color_blend_factor: BlendFactor::SrcAlpha,
-                dst_color_blend_factor: BlendFactor::OneMinusSrcAlpha,
-                color_blend_op: BlendOp::Add,
-                src_alpha_blend_factor: BlendFactor::One,
-                dst_alpha_blend_factor: BlendFactor::Zero,
-                alpha_blend_op: BlendOp::Add,
-                color_write_mask: ColorWriteMask::all(),
-            }],
+            enabled: true,
+            src_color_blend: BlendMode::SrcAlpha,
+            dst_color_blend: BlendMode::OneMinusSrcAlpha,
+            color_blend_op: BlendOp::Add,
+            src_alpha_blend: BlendMode::One,
+            dst_alpha_blend: BlendMode::Zero,
+            alpha_blend_op: BlendOp::Add,
+            write_mask: 0xF, // Enable all channels (RGBA)
         };
 
         // 4. Создание PSO
         let pso_desc = PipelineStateObject {
             vertex_shader,
             fragment_shader: Some(fragment_shader),
+            compute_shader: None,
             input_layout,
+            color_blend_states: vec![blend_state],
+            depth_state: DepthState {
+                enabled: false,
+                write_enabled: false,
+                compare_func: CompareFunc::Always,
+            },
+            stencil_state: StencilState::default(),
+            rasterizer_state: RasterizerState {
+                cull_mode: CullMode::None,
+                front_face: FrontFace::CounterClockwise,
+                fill_mode: FillMode::Solid,
+                polygon_offset_factor: 0.0,
+                polygon_offset_units: 0.0,
+            },
             primitive_topology: PrimitiveTopology::TriangleList,
-            rasterizer: RasterizerState::default(),
-            depth_stencil: DepthState { depth_test_enable: false, ..Default::default() },
-            color_blend: blend_state,
-            ..Default::default()
+            sample_count: 1,
         };
 
         self.pipeline = Some(self.device.create_pipeline_state(&pso_desc)

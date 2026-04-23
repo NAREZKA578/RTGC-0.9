@@ -1,4 +1,4 @@
-use ab_glyph::{Font, FontArc, Glyph, ScaleFont};
+use ab_glyph::{Font, FontRef, Glyph, ScaleFont};
 use crate::graphics::rhi::ResourceHandle;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -13,7 +13,7 @@ pub struct GlyphData {
 
 /// Шрифт с загруженным атласом глифов
 pub struct FontAtlas {
-    font: FontArc,
+    font: FontRef<'static>,
     /// Кэш загруженных глифов (по Unicode скаляру)
     glyphs: HashMap<char, GlyphData>,
     /// Размер шрифта в пикселях (высота)
@@ -25,15 +25,20 @@ pub struct FontAtlas {
     /// Размеры атласа
     atlas_width: u32,
     atlas_height: u32,
+    /// Владелец данных шрифта (для поддержания времени жизни)
+    _font_data: Vec<u8>,
 }
 
 impl FontAtlas {
     /// Загрузить шрифт из файла TTF/OTF
     pub fn load_from_file(path: &str, pixel_height: f32) -> Result<Self, String> {
-        let font_bytes = std::fs::read(path)
+        let mut font_bytes = std::fs::read(path)
             .map_err(|e| format!("Failed to read font file {}: {}", path, e))?;
         
-        let font = FontArc::try_from_vec(font_bytes)
+        // Создаём FontRef из вектора байтов
+        // Используем Box::leak для получения 'static времени жизни
+        let font_data: &'static [u8] = Box::leak(font_bytes.into_boxed_slice());
+        let font = FontRef::try_from_slice(font_data)
             .map_err(|e| format!("Failed to parse font: {}", e))?;
         
         let scaled_font = font.as_scaled(pixel_height);
@@ -133,6 +138,7 @@ impl FontAtlas {
             atlas_data,
             atlas_width: atlas_width as u32,
             atlas_height: atlas_height as u32,
+            _font_data: font_data.to_vec(),
         })
     }
     
