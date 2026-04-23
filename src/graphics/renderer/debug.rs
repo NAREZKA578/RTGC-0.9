@@ -5,6 +5,7 @@
 use crate::graphics::rhi::{IDevice, ICommandList, ResourceHandle, BufferDescription, BufferType, BufferUsage, ResourceState, VertexFormat, VertexAttribute, InputLayout, PipelineStateObject, PrimitiveTopology, RasterizerState, CullMode, FrontFace, FillMode, DepthState, ColorBlendState, BlendMode, BlendOp};
 use nalgebra::{Matrix4, Vector3};
 use std::sync::Arc;
+use tracing;
 
 /// Вершина для отладочного рендеринга
 #[repr(C)]

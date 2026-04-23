@@ -8,12 +8,16 @@ pub mod renderer;
 pub mod lighting;
 pub mod rhi;
 pub mod gl_context;
+pub mod shader;
+pub mod mesh;
 
 pub use camera::Camera;
 pub use material::{MaterialManager, TextureQuality};
 pub use particles::ParticleSystem;
 pub use renderer::{Renderer, RenderCommand, UiCommand, RendererConfig};
 pub use gl_context::GlContext;
+pub use shader::{load_shader_from_file, load_vertex_shader, load_fragment_shader};
+pub use mesh::{Mesh, SimpleVertex};
 
 /// Универсальный графический контекст
 pub enum GraphicsContext {
