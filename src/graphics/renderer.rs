@@ -21,3 +21,4 @@ pub use pipeline_cache::{PipelineCache, PipelineKey};
 pub use scene::SceneRenderer;
 pub use ui::UIRenderer;
 pub use renderer::{Renderer, RendererConfig};
+pub use crate::graphics::mesh::Mesh;

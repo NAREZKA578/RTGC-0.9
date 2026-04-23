@@ -6,6 +6,7 @@ use crate::graphics::rhi::{IDevice, ICommandList, ResourceHandle, BufferDescript
 use crate::graphics::renderer::commands::UiCommand;
 use nalgebra::Matrix4;
 use std::sync::Arc;
+use tracing;
 
 /// Вершина для UI рендеринга
 #[repr(C)]
