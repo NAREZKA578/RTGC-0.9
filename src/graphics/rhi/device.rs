@@ -252,18 +252,30 @@ pub trait IFence: Send + Sync {
 pub trait ISemaphore: Send + Sync {}
 
 /// Swap chain for presenting to window
-pub trait ISwapChain: Send + Sync {
+pub trait ISwapChain: Send + Sync + std::any::Any {
     /// Get the current back buffer index
     fn get_current_back_buffer_index(&self) -> u32;
     
     /// Get the back buffer texture
     fn get_back_buffer(&self) -> ResourceHandle;
     
+    /// Get the actual back buffer texture handle for creating texture views
+    fn get_back_buffer_texture(&self) -> ResourceHandle {
+        self.get_back_buffer()
+    }
+    
     /// Resize the swap chain
     fn resize(&mut self, width: u32, height: u32) -> RhiResult<()>;
     
     /// Present the current frame
     fn present(&self) -> RhiResult<()>;
+}
+
+// Helper method for downcasting
+impl dyn ISwapChain {
+    pub fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }
 
 /// Texture view description
@@ -317,6 +329,8 @@ bitflags::bitflags! {
 pub struct RenderPassDescription {
     pub color_attachments: Vec<RenderAttachment>,
     pub depth_stencil_attachment: Option<DepthStencilAttachment>,
+    pub width: u32,
+    pub height: u32,
 }
 
 /// Render attachment description

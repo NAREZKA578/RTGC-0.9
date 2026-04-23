@@ -1,17 +1,14 @@
-```
-# Compiled and build artifacts
-*.o
-*.obj
-*.out
-
-# Dependencies
+```rust
 target/
-
-# Logs and temp files
+**/*.rs.bk
+**/*.lock
+.DS_Store
+Thumbs.db
 *.log
 *.tmp
-
-# Editors
 .vscode/
 .idea/
+.env
+.env.local
+.env.*
 ```
