@@ -1,6 +1,7 @@
 #version 450 core
 
 in vec3 vColor;
+
 out vec4 FragColor;
 
 void main() {

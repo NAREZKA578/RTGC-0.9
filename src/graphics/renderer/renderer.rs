@@ -54,9 +54,17 @@ impl Renderer {
         let height = config.height;
         
         // Создаём под-рендереры
-        let scene_renderer = SceneRenderer::new(device.clone());
-        let ui_renderer = UIRenderer::new(device.clone());
+        let mut scene_renderer = SceneRenderer::new(device.clone());
+        let mut ui_renderer = UIRenderer::new(device.clone(), width, height);
         let debug_renderer = DebugRenderer::new(device.clone());
+        
+        // Инициализируем UI рендерер (шейдеры, PSO, буферы)
+        ui_renderer.initialize()
+            .map_err(|e| format!("Failed to initialize UI renderer: {}", e))?;
+        
+        // Инициализируем Scene рендерер
+        scene_renderer.initialize()
+            .map_err(|e| format!("Failed to initialize Scene renderer: {}", e))?;
         
         let mut renderer = Self {
             device: device.clone(),
@@ -146,14 +154,14 @@ impl Renderer {
     }
     
     /// Рендерит сцену
-    pub fn render_scene(&mut self, commands: &[RenderCommand]) -> Result<(), String> {
-        self.scene_renderer.render(&self.camera, commands)?;
+    pub fn render_scene(&mut self, commands: &[RenderCommand], cmd_list: &mut dyn ICommandList) -> Result<(), String> {
+        self.scene_renderer.render(&self.camera, commands, cmd_list)?;
         Ok(())
     }
     
     /// Рендерит UI
-    pub fn render_ui(&mut self, commands: &[UiCommand]) -> Result<(), String> {
-        self.ui_renderer.render(commands, (self.width, self.height))?;
+    pub fn render_ui(&mut self, commands: &[UiCommand], cmd_list: &mut dyn ICommandList) -> Result<(), String> {
+        self.ui_renderer.render(commands, cmd_list)?;
         Ok(())
     }
     

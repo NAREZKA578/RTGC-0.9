@@ -53,6 +53,7 @@ pub struct VertexAttribute {
     pub name: String,
     pub format: VertexFormat,
     pub offset: u32,
+    pub location: u32,
 }
 
 /// Input layout for vertex shader
@@ -312,6 +313,23 @@ impl PipelineStateObject {
     }
 }
 
+impl Default for PipelineStateObject {
+    fn default() -> Self {
+        Self {
+            vertex_shader: ResourceHandle::INVALID,
+            fragment_shader: None,
+            compute_shader: None,
+            input_layout: InputLayout { attributes: vec![], stride: 0 },
+            color_blend_states: vec![ColorBlendState::default()],
+            depth_state: DepthState::default(),
+            stencil_state: StencilState::default(),
+            rasterizer_state: RasterizerState::default(),
+            primitive_topology: PrimitiveTopology::TriangleList,
+            sample_count: 1,
+        }
+    }
+}
+
 /// Primitive topology for drawing
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PrimitiveTopology {
@@ -552,6 +570,17 @@ pub struct BufferDescription {
     pub size: u64,
     pub usage: BufferUsage,
     pub initial_state: ResourceState,
+}
+
+impl Default for BufferDescription {
+    fn default() -> Self {
+        Self {
+            buffer_type: BufferType::Vertex,
+            size: 0,
+            usage: BufferUsage::VERTEX_BUFFER,
+            initial_state: ResourceState::Common,
+        }
+    }
 }
 
 /// Alias for BufferDescription
