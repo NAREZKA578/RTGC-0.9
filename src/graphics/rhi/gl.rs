@@ -675,6 +675,9 @@ impl ICommandList for GlCommandList {
                 self.context.draw_buffers(&[draw_buffer]);
             }
 
+            // Устанавливаем viewport на весь экран
+            self.context.viewport(0, 0, desc.width as i32, desc.height as i32);
+
             // Clear attachments если нужно
             for (i, attachment) in desc.color_attachments.iter().enumerate() {
                 if attachment.load_op == LoadOp::Clear {
@@ -1099,7 +1102,15 @@ impl ISwapChain for GlSwapChainInternal {
     }
     
     fn get_back_buffer(&self) -> ResourceHandle {
-        ResourceHandle(1) // Фиктивный handle
+        // Возвращаем handle для цветовой текстуры swapchain
+        // В полной реализации нужно создать отдельный ResourceHandle для texture view
+        ResourceHandle(1) 
+    }
+    
+    fn get_back_buffer_texture(&self) -> ResourceHandle {
+        // Возвращаем handle для самой текстуры (не view)
+        // Это нужно для создания framebuffer в render pass
+        ResourceHandle(2)
     }
     
     fn resize(&mut self, width: u32, height: u32) -> RhiResult<()> {
@@ -1117,6 +1128,16 @@ impl ISwapChain for GlSwapChainInternal {
     
     fn present(&self) -> RhiResult<()> {
         // В OpenGL презентация происходит через swap_buffers в winit/glutin
+        // Этот метод вызывается из GlCommandQueue::present или напрямую из GlContext
+        // Здесь просто flush для гарантии выполнения команд
+        unsafe { self.context.flush(); }
+        
+        // Примечание: фактический swap_buffers должен вызываться из GlContext::present()
+        // где есть доступ к surface. Этот метод только гарантирует, что все команды
+        // отправлены GPU.
         Ok(())
     }
 }
+
+// Add Any support for downcasting
+impl std::any::Any for GlSwapChainInternal {}

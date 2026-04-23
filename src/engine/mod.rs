@@ -23,6 +23,7 @@ pub mod world_manager;
 pub mod vehicle_manager;
 pub mod input_manager;
 pub mod game_loop_manager;
+pub mod render_manager;
 
 pub use core::*;
 pub use state::*;
@@ -32,3 +33,4 @@ pub use world_manager::*;
 pub use vehicle_manager::*;
 pub use input_manager::*;
 pub use game_loop_manager::*;
+pub use render_manager::*;

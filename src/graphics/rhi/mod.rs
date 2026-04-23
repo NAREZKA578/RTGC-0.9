@@ -22,3 +22,4 @@ pub use device::*;
 pub use factory::*;
 pub use rhi_module::*;
 pub use resource_manager::*;
+pub use gl::{GlDevice, GlCommandQueue, GlCommandList, GlSwapChainInternal, GlFence};

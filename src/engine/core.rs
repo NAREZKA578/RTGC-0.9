@@ -18,6 +18,8 @@ use crate::game::loading_manager::{LoadingManager, LoadingStage, LoadingStateDet
 use crate::game::MainMenu;
 use crate::graphics::material::MaterialManager;
 use crate::graphics::particles::ParticleSystem;
+use crate::graphics::GraphicsContext;
+use crate::graphics::renderer::DebugRenderer;
 use crate::physics::set_global_physics_world;
 use crate::ui::HudManager;
 use nalgebra::{UnitQuaternion, Vector3};
@@ -242,49 +244,26 @@ impl ApplicationHandler for GameApp<'_> {
         match backend.to_lowercase().as_str() {
             "dx11" | "dx12" => {
                 // DX11/DX12: Use our window for DX context
-                use raw_window_handle::RawWindowHandle;
-                let hwnd = match window_arc.as_ref().unwrap().window_handle() {
-                    Ok(handle) => {
-                        let raw = handle.as_raw();
-                        match raw {
-                            RawWindowHandle::Win32(win32) => win32.hwnd.get() as isize,
-                            _ => {
-                                error!(target: "engine", "Unsupported window handle type");
-                                event_loop.exit();
-                                return;
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        error!(target: "engine", "Failed to get window handle: {:?}", e);
-                        event_loop.exit();
-                        return;
-                    }
-                };
-
-                info!(target: "engine", "Creating DX{} context...", &backend[2..4]);
-                let width = window_arc.as_ref().unwrap().inner_size().width;
-                let height = window_arc.as_ref().unwrap().inner_size().height;
-                match crate::graphics::dx11_context::Dx11GraphicsContext::new(hwnd, width, height) {
-                    Ok(dx_ctx) => {
-                        self.engine.graphics_context = Some(GraphicsContext::DX11(dx_ctx));
-                        info!(target: "engine", "DX{} context created successfully", &backend[2..4]);
-                    }
-                    Err(e) => {
-                        error!(target: "engine", "Failed to create DX{} context: {}", &backend[2..4], e);
-                        event_loop.exit();
-                        return;
-                    }
-                }
+                error!(target: "engine", "DX11/DX12 backends are not yet implemented in this version");
+                event_loop.exit();
+                return;
             }
             _ => {
                 // OpenGL: Let GlContext create its own window with full GL setup
                 info!(target: "engine", "Creating GL context...");
-                let window_attrs = WindowAttributes::default()
-                    .with_inner_size(winit::dpi::LogicalSize::new(1280.0, 720.0))
-                    .with_title("RTGC-0.8");
+                
+                // Создаём окно для OpenGL контекста
+                let window = match event_loop.create_window(window_attrs) {
+                    Ok(w) => w,
+                    Err(e) => {
+                        error!(target: "engine", "Failed to create window for GL: {:?}", e);
+                        event_loop.exit();
+                        return;
+                    }
+                };
+                
                 let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                    crate::graphics::GlContext::new(event_loop, window_attrs)
+                    crate::graphics::GlContext::new(window)
                 }));
 
                 let mut gl_context = match result {
@@ -300,6 +279,13 @@ impl ApplicationHandler for GameApp<'_> {
                         return;
                     }
                 };
+
+                // Создаём свопчейн сразу после создания контекста
+                if let Err(e) = gl_context.create_swapchain(false) {
+                    error!(target: "engine", "Failed to create swapchain: {:?}", e);
+                    event_loop.exit();
+                    return;
+                }
 
                 if !gl_context.is_initialized() {
                     error!(target: "engine", "Graphics context not initialized after creation");
@@ -340,8 +326,8 @@ impl ApplicationHandler for GameApp<'_> {
             return;
         }
 
-        // Сохраняем контекст обратно в Engine
-        self.engine.graphics_context = Some(render_manager.take_context());
+        // Контекст остаётся внутри RenderManager - не забираем его обратно
+        // Engine будет использовать RenderManager для доступа к контексту
 
         self.engine.render_manager = Some(render_manager);
 

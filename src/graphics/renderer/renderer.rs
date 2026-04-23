@@ -59,9 +59,9 @@ impl Renderer {
         let debug_renderer = DebugRenderer::new(device.clone());
         
         let mut renderer = Self {
-            device,
+            device: device.clone(),
             command_queue,
-            swap_chain,
+            swap_chain: swap_chain.clone(),
             scene_renderer,
             ui_renderer,
             debug_renderer,
@@ -84,7 +84,31 @@ impl Renderer {
         // Обновляем орто-матрицу UI
         renderer.ui_renderer.update_ortho_matrix(width, height);
         
+        // Создаём render passes с размерами экрана
+        renderer.create_render_passes()?;
+        
         Ok(renderer)
+    }
+    
+    /// Создаёт все render passes
+    fn create_render_passes(&mut self) -> Result<(), String> {
+        // Для начала создадим простой тестовый pass с очисткой экрана
+        // В полной реализации здесь будут созданы framebuffer'ы для color/depth
+        
+        // Получаем backbuffer texture из swapchain для основного прохода
+        let backbuffer_texture = self.swap_chain.get_back_buffer_texture();
+        
+        // Создаём depth texture (пока заглушка - в полной реализации создать через device.create_texture)
+        let depth_texture = ResourceHandle::default();
+        
+        self.main_pass = Some(MainRenderPass::new(
+            backbuffer_texture,
+            depth_texture,
+            self.width,
+            self.height,
+        ));
+        
+        Ok(())
     }
     
     /// Начинает кадр
@@ -94,6 +118,31 @@ impl Renderer {
         self.ui_renderer.clear();
         
         Ok(())
+    }
+    
+    /// Рендер кадра (основной метод)
+    pub fn render_frame(&mut self) -> Result<(), String> {
+        // Создаём command list для текущего кадра
+        let mut cmd_list = self.device.create_command_list(crate::graphics::rhi::CommandListType::Graphics)
+            .map_err(|e| format!("Failed to create command list: {:?}", e))?;
+        
+        // Начинаем render pass с очисткой экрана
+        if let Some(ref main_pass) = self.main_pass {
+            cmd_list.begin_render_pass(&main_pass.description());
+            
+            // Здесь будет рендеринг сцены, UI и отладки
+            // Пока просто очищаем экран цветом из main_pass
+            
+            cmd_list.end_render_pass();
+        }
+        
+        // Завершаем command list и отправляем на выполнение
+        cmd_list.close();
+        self.command_queue.submit(&[&cmd_list])
+            .map_err(|e| format!("Failed to submit command list: {:?}", e))?;
+        
+        // Present
+        self.end_frame()
     }
     
     /// Рендерит сцену

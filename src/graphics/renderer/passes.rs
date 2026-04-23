@@ -8,15 +8,19 @@ pub struct MainRenderPass {
     pub depth_attachment: ResourceHandle,
     pub clear_color: [f32; 4],
     pub clear_depth: f32,
+    pub width: u32,
+    pub height: u32,
 }
 
 impl MainRenderPass {
-    pub fn new(color_attachment: ResourceHandle, depth_attachment: ResourceHandle) -> Self {
+    pub fn new(color_attachment: ResourceHandle, depth_attachment: ResourceHandle, width: u32, height: u32) -> Self {
         Self {
             color_attachment,
             depth_attachment,
             clear_color: [0.1, 0.1, 0.15, 1.0],
             clear_depth: 1.0,
+            width,
+            height,
         }
     }
     
@@ -37,6 +41,8 @@ impl MainRenderPass {
                 depth_clear_value: Some(self.clear_depth),
                 stencil_clear_value: None,
             }),
+            width: self.width,
+            height: self.height,
         }
     }
 }
@@ -44,11 +50,13 @@ impl MainRenderPass {
 /// Render pass для теней (shadow map)
 pub struct ShadowRenderPass {
     pub depth_attachment: ResourceHandle,
+    pub width: u32,
+    pub height: u32,
 }
 
 impl ShadowRenderPass {
-    pub fn new(depth_attachment: ResourceHandle) -> Self {
-        Self { depth_attachment }
+    pub fn new(depth_attachment: ResourceHandle, width: u32, height: u32) -> Self {
+        Self { depth_attachment, width, height }
     }
     
     pub fn description(&self) -> RenderPassDescription {
@@ -63,6 +71,8 @@ impl ShadowRenderPass {
                 depth_clear_value: Some(1.0),
                 stencil_clear_value: None,
             }),
+            width: self.width,
+            height: self.height,
         }
     }
 }
@@ -71,13 +81,17 @@ impl ShadowRenderPass {
 pub struct PostProcessRenderPass {
     pub input_attachment: ResourceHandle,
     pub output_attachment: ResourceHandle,
+    pub width: u32,
+    pub height: u32,
 }
 
 impl PostProcessRenderPass {
-    pub fn new(input_attachment: ResourceHandle, output_attachment: ResourceHandle) -> Self {
+    pub fn new(input_attachment: ResourceHandle, output_attachment: ResourceHandle, width: u32, height: u32) -> Self {
         Self {
             input_attachment,
             output_attachment,
+            width,
+            height,
         }
     }
     
@@ -90,6 +104,8 @@ impl PostProcessRenderPass {
                 clear_value: Some(ClearValue::Color([0.0, 0.0, 0.0, 1.0])),
             }],
             depth_stencil_attachment: None,
+            width: self.width,
+            height: self.height,
         }
     }
 }
