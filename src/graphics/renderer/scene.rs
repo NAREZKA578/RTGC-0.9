@@ -125,8 +125,8 @@ impl SceneRenderer {
         self.light_data.sun_direction = [direction.x, direction.y, direction.z, 0.0];
     }
     
-    /// Рендерит сцену
-    pub fn render(&mut self, camera: &Camera, commands: &[RenderCommand]) -> Result<(), String> {
+    /// Рендерит сцену через command list
+    pub fn render(&mut self, camera: &Camera, commands: &[RenderCommand], cmd_list: &mut dyn ICommandList) -> Result<(), String> {
         // Обновляем камеру
         self.update_camera(camera);
         

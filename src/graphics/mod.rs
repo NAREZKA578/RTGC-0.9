@@ -10,14 +10,18 @@ pub mod rhi;
 pub mod gl_context;
 pub mod shader;
 pub mod mesh;
+pub mod font;
+pub mod resources;
+pub mod texture;
 
 pub use camera::Camera;
 pub use material::{MaterialManager, TextureQuality};
 pub use particles::ParticleSystem;
 pub use renderer::{Renderer, RenderCommand, UiCommand, RendererConfig};
-pub use gl_context::GlContext;
+pub use gl_context::{GlContext, GraphicsContext};
 pub use shader::{load_shader_from_file, load_vertex_shader, load_fragment_shader};
 pub use mesh::{Mesh, SimpleVertex};
+pub use font::{FontAtlas, FontManager, GlyphData};
 
 /// Универсальный графический контекст
 pub enum GraphicsContext {

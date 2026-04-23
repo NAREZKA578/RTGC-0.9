@@ -486,7 +486,7 @@ impl IDevice for GlDevice {
     }
     
     fn create_command_list(&self, cmd_type: CommandListType) -> RhiResult<Arc<dyn ICommandList>> {
-        Ok(Arc::new(GlCommandList::new(self.context.clone(), cmd_type)))
+        Ok(Arc::new(GlCommandList::new(self.context.clone(), Arc::new(self.clone()), cmd_type)))
     }
     
     fn create_command_queue(&self, cmd_type: CommandListType) -> RhiResult<Arc<dyn ICommandQueue>> {
@@ -620,6 +620,7 @@ impl IDevice for GlDevice {
 /// OpenGL Command List - записывает команды для выполнения
 pub struct GlCommandList {
     context: Arc<Context>,
+    device: Arc<GlDevice>,
     cmd_type: CommandListType,
     is_recording: bool,
     current_program: Option<u32>,
@@ -631,9 +632,10 @@ unsafe impl Send for GlCommandList {}
 unsafe impl Sync for GlCommandList {}
 
 impl GlCommandList {
-    pub fn new(context: Arc<Context>, cmd_type: CommandListType) -> Self {
+    pub fn new(context: Arc<Context>, device: Arc<GlDevice>, cmd_type: CommandListType) -> Self {
         Self {
             context,
+            device,
             cmd_type,
             is_recording: false,
             current_program: None,
@@ -725,10 +727,11 @@ impl ICommandList for GlCommandList {
     
     fn set_pipeline_state(&mut self, pso: ResourceHandle) {
         // В OpenGL нужно установить программу и VAO из PSO
-        // В полной реализации получаем данные из ResourceManager
-        unsafe {
-            // Здесь должна быть установка программы: self.context.use_program(Some(program));
-            // И установка VAO: self.context.bind_vertex_array(Some(vao));
+        if let Some(pipeline) = self.device.pipelines.lock().unwrap().get(&pso) {
+            unsafe {
+                self.context.use_program(Some(pipeline.program));
+                self.context.bind_vertex_array(Some(pipeline.vertex_array));
+            }
         }
     }
     

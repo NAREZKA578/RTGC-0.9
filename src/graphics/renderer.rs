@@ -14,11 +14,11 @@ pub mod scene;
 pub mod ui;
 pub mod renderer;
 
-pub use commands::{RenderCommand, UiCommand};
+pub use commands::{RenderCommand, UiCommand, RendererConfig};
 pub use debug::DebugRenderer;
-pub use passes::{RenderPass, MainPass, ShadowPass, PostProcessPass};
-pub use pipeline_cache::{PipelineCache, PipelineKey};
+pub use passes::{RenderPass, MainPass, ShadowPass, PostProcessPass, MainRenderPass, ShadowRenderPass, PostProcessRenderPass};
+pub use pipeline_cache::{PipelineCache, PipelineKey, PipelineCacheStats};
 pub use scene::SceneRenderer;
 pub use ui::UIRenderer;
-pub use renderer::{Renderer, RendererConfig};
+pub use renderer::Renderer;
 pub use crate::graphics::mesh::Mesh;

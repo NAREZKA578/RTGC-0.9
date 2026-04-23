@@ -1,5 +1,5 @@
 //! Assets module for RTGC-0.8
 
-pub mod assets_module;
+pub mod server;
 
-pub use assets_module::*;
+pub use server::{AssetServer, AssetType, LoadedTexture, LoadedFont};

@@ -26,11 +26,13 @@ impl DebugVertex {
                 name: "position".to_string(),
                 format: VertexFormat::Float32x3,
                 offset: 0,
+                location: 0,
             },
             VertexAttribute {
                 name: "color".to_string(),
                 format: VertexFormat::Float32x4,
                 offset: 12,
+                location: 1,
             },
         ];
         InputLayout::new(attributes)
