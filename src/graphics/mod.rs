@@ -20,14 +20,9 @@ pub mod sky_renderer;
 pub use camera::Camera;
 pub use material::{MaterialManager, TextureQuality};
 pub use particles::ParticleSystem;
-pub use renderer::{Renderer, RenderCommand, UiCommand, RendererConfig, SceneRenderer, SceneRendererStats};
-pub use gl_context::{GlContext, GraphicsContext};
-pub use shader::{load_shader_from_file, load_vertex_shader, load_fragment_shader};
-pub use mesh::{Mesh, SimpleVertex};
-pub use font::{FontAtlas, FontManager, GlyphData};
-pub use terrain_mesh_builder::TerrainMeshBuilder;
-pub use terrain_renderer::TerrainRenderer;
-pub use sky_renderer::SkyRenderer;
+pub use renderer::{Renderer, RenderCommand, UiCommand, RendererConfig, SceneRenderer, SceneRendererStats, GraphicsContext};
+pub use gl_context::GlContext;
+pub use renderer::RenderQueue;
 
 /// Универсальный графический контекст
 pub enum GraphicsContext {
@@ -57,3 +52,9 @@ impl GraphicsContext {
         }
     }
 }
+pub use shader::{load_shader_from_file, load_vertex_shader, load_fragment_shader};
+pub use mesh::{Mesh, SimpleVertex};
+pub use font::{FontAtlas, FontManager, GlyphData};
+pub use terrain_mesh_builder::TerrainMeshBuilder;
+pub use terrain_renderer::TerrainRenderer;
+pub use sky_renderer::SkyRenderer;

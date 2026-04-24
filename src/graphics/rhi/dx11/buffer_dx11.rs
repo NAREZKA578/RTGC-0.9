@@ -12,7 +12,7 @@ use crate::graphics::rhi::RhiResult;
 use windows::{
     Win32::Graphics::Direct3D11::{
         D3D11_BUFFER_DESC, D3D11_MAPPED_SUBRESOURCE,
-        D3D11_MAP_WRITE_DISCARD, D3D11_MAP_READ, D3D11_MAP_WRITE,
+        D3D11_MAP_WRITE_DISCARD,
         D3D11_USAGE_DEFAULT, D3D11_USAGE_DYNAMIC, D3D11_USAGE_IMMUTABLE,
         D3D11_CPU_ACCESS_WRITE, D3D11_CPU_ACCESS_READ,
         D3D11_BIND_VERTEX_BUFFER, D3D11_BIND_INDEX_BUFFER, D3D11_BIND_CONSTANT_BUFFER,
@@ -89,7 +89,7 @@ impl Dx11Buffer {
         };
         
         // Determine misc flags
-        let mut misc_flags = D3D11_RESOURCE_MISC_NONE.0;
+        let mut misc_flags = 0u32;
         if desc.usage.contains(BufferUsage::STORAGE_BUFFER) || desc.buffer_type == BufferType::Storage {
             misc_flags |= D3D11_RESOURCE_MISC_BUFFER_STRUCTURED.0;
         }

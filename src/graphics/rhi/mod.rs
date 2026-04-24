@@ -23,3 +23,5 @@ pub use factory::*;
 pub use rhi_module::*;
 pub use resource_manager::*;
 pub use gl::{GlDevice, GlCommandQueue, GlCommandList, GlSwapChainInternal, GlFence};
+#[cfg(target_os = "windows")]
+pub use dx11::Dx11Device;
