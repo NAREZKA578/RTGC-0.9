@@ -377,4 +377,98 @@ impl UIRenderer {
         self.vertices.clear();
         self.indices.clear();
     }
+
+    /// Рендерит экран загрузки с прогресс-баром
+    pub fn render_loading_screen(&mut self, progress: f32, message: &str, cmd_list: &mut dyn ICommandList) -> Result<(), String> {
+        self.vertices.clear();
+        self.indices.clear();
+
+        let w = self.width as f32;
+        let h = self.height as f32;
+
+        // Фон (тёмный)
+        self.add_rect([0.0, 0.0], [w, h], [0.05, 0.05, 0.1, 1.0], None);
+
+        // Заголовок
+        let title = "Загрузка...";
+        let title_size = 48.0;
+        let title_width = self.measure_text_width(title, title_size);
+        let title_x = (w - title_width) / 2.0;
+        let title_y = h / 2.0 - 80.0;
+        
+        // Добавляем текст через генерацию глифов
+        self.add_text_simple(title, [title_x, title_y], title_size, [0.9, 0.7, 0.2, 1.0]);
+
+        // Прогресс-бар фон
+        let bar_width = w * 0.6;
+        let bar_height = 30.0;
+        let bar_x = (w - bar_width) / 2.0;
+        let bar_y = h / 2.0;
+        self.add_rect([bar_x, bar_y], [bar_width, bar_height], [0.2, 0.2, 0.25, 1.0], None);
+
+        // Прогресс-бар заполнение
+        let fill_width = bar_width * progress.clamp(0.0, 1.0);
+        if fill_width > 0.0 {
+            self.add_rect([bar_x, bar_y], [fill_width, bar_height], [0.0, 0.7, 0.3, 1.0], None);
+        }
+
+        // Текст сообщения под прогресс-баром
+        let msg_size = 24.0;
+        let msg_width = self.measure_text_width(message, msg_size);
+        let msg_x = (w - msg_width) / 2.0;
+        let msg_y = bar_y + bar_height + 20.0;
+        self.add_text_simple(message, [msg_x, msg_y], msg_size, [1.0, 1.0, 1.0, 1.0]);
+
+        // Отправляем геометрию на рендеринг
+        if !self.vertices.is_empty() {
+            let vb = self.vertex_buffer.ok_or("UI vertex buffer not initialized")?;
+            let vertex_data = bytemuck::cast_slice(&self.vertices);
+            self.device.update_buffer(vb, 0, vertex_data)
+                .map_err(|e| format!("Failed to update UI vertex buffer: {:?}", e))?;
+
+            let ib = self.index_buffer.ok_or("UI index buffer not initialized")?;
+            let index_data = bytemuck::cast_slice(&self.indices);
+            self.device.update_buffer(ib, 0, index_data)
+                .map_err(|e| format!("Failed to update UI index buffer: {:?}", e))?;
+
+            let pipeline = self.pipeline.ok_or("UI pipeline not initialized")?;
+            cmd_list.set_pipeline_state(pipeline);
+            cmd_list.bind_vertex_buffers(0, &[(vb, 0)]);
+            cmd_list.bind_index_buffer(ib, 0);
+
+            if let Some(ub) = self.uniform_buffer {
+                cmd_list.bind_constant_buffer(crate::graphics::rhi::ShaderStage::Vertex, 0, ub);
+            }
+
+            cmd_list.draw_indexed(self.indices.len() as u32, 1, 0, 0, 0);
+        }
+
+        Ok(())
+    }
+
+    /// Простая версия add_text без шрифта (заглушка для системного текста)
+    fn add_text_simple(&mut self, text: &str, pos: [f32; 2], font_size: f32, color: [f32; 4]) {
+        // Если шрифт не установлен, рисуем простой прямоугольник вместо текста
+        // В полной реализации здесь будет использование FontAtlas
+        if self.font.is_none() {
+            // Рисуем декоративную линию вместо текста
+            let width = text.len() as f32 * font_size * 0.6;
+            let height = font_size * 0.8;
+            self.add_rect([pos[0], pos[1] - height], [width, height], color, None);
+        } else if let Some(ref font) = self.font {
+            self.add_text(text, pos, font_size, color, font);
+        }
+    }
+
+    /// Измеряет ширину текста (заглушка без шрифта)
+    fn measure_text_width(&self, text: &str, font_size: f32) -> f32 {
+        if let Some(ref font) = self.font {
+            let (width, _) = font.measure_text(text);
+            let scale = font_size / font.pixel_height;
+            width * scale
+        } else {
+            // Заглушка: примерная ширина символа
+            text.len() as f32 * font_size * 0.6
+        }
+    }
 }

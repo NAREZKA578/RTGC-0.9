@@ -152,6 +152,63 @@ impl Renderer {
         // Present
         self.end_frame()
     }
+
+    /// Рендер кадра с поддержкой состояний движка (меню, загрузка, игра)
+    pub fn render_frame_with_state(
+        &mut self,
+        game_state: &crate::engine::state::EngineState,
+        main_menu: &crate::game::MainMenu,
+    ) -> Result<(), String> {
+        // Создаём command list для текущего кадра
+        let mut cmd_list = self.device.create_command_list(crate::graphics::rhi::CommandListType::Graphics)
+            .map_err(|e| format!("Failed to create command list: {:?}", e))?;
+        
+        // Начинаем render pass с очисткой экрана
+        if let Some(ref main_pass) = self.main_pass {
+            cmd_list.begin_render_pass(&main_pass.description());
+            
+            match game_state {
+                crate::engine::state::EngineState::MainMenu { .. } => {
+                    // Рендеринг главного меню через UI команды
+                    let window_size = [self.width as f32, self.height as f32];
+                    let mut ui_commands = Vec::new();
+                    main_menu.render(&mut ui_commands, window_size);
+                    self.render_ui(&ui_commands, &mut cmd_list)?;
+                }
+                crate::engine::state::EngineState::Loading { progress, resource_type } => {
+                    // Рендеринг экрана загрузки
+                    let message = format!("Loading {:?}...", resource_type);
+                    self.ui_renderer.render_loading_screen(*progress, &message, &mut cmd_list)?;
+                }
+                crate::engine::state::EngineState::Playing { .. } |
+                crate::engine::state::EngineState::Paused { .. } => {
+                    // Рендеринг 3D сцены (пока пусто - будет заполнено позже)
+                    // Если пауза, можно добавить полупрозрачный оверлей
+                    if matches!(game_state, crate::engine::state::EngineState::Paused { .. }) {
+                        // Полупрозрачный оверлей
+                        self.ui_renderer.render(&[UiCommand::Rect {
+                            position: [0.0, 0.0],
+                            size: [self.width as f32, self.height as f32],
+                            color: [0.0, 0.0, 0.0, 0.5],
+                        }], &mut cmd_list)?;
+                    }
+                }
+                _ => {
+                    // Другие состояния (ошибка, инициализация) - просто очищаем экран
+                }
+            }
+            
+            cmd_list.end_render_pass();
+        }
+        
+        // Завершаем command list и отправляем на выполнение
+        cmd_list.close();
+        self.command_queue.submit(&[&cmd_list])
+            .map_err(|e| format!("Failed to submit command list: {:?}", e))?;
+        
+        // Present
+        self.end_frame()
+    }
     
     /// Рендерит сцену
     pub fn render_scene(&mut self, commands: &[RenderCommand], cmd_list: &mut dyn ICommandList) -> Result<(), String> {
