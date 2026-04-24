@@ -576,7 +576,7 @@ impl VehiclePartsSystem {
     /// Apply mesh deformation to render command
     pub fn apply_to_render_command(
         &self,
-        command: &mut crate::graphics::render_command::RenderCommand,
+        command: &mut crate::graphics::renderer::RenderCommand,
         impact_point: &str,
         damage: f32,
     ) {

@@ -5,9 +5,8 @@ use crate::game::interaction::{InteractableType, InteractionResult};
 use crate::game::player::{CameraMode, PlayerState};
 use crate::game::skills::PlayerSkills;
 use crate::game::weather::{PrecipitationType, WeatherState};
-use crate::graphics::render_command::RenderCommand;
-use crate::graphics::render_command::{UI_DEPTH_HUD, UI_DEPTH_NOTIFICATIONS, UI_DEPTH_PROMPT};
-use crate::graphics::render_queue::RenderQueue;
+use crate::graphics::renderer::{RenderCommand, UI_DEPTH_HUD, UI_DEPTH_NOTIFICATIONS, UI_DEPTH_PROMPT};
+use crate::graphics::renderer::RenderQueue;
 use nalgebra::{Vector2, Vector3};
 
 // Type aliases for backwards compatibility

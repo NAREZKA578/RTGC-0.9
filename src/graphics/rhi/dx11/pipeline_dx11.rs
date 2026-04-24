@@ -38,8 +38,6 @@ use windows::Win32::Graphics::Direct3D11::{
     D3D11_BLEND_DEST_COLOR,
     D3D11_BLEND_INV_DEST_COLOR,
     D3D11_BLEND_SRC_ALPHA_SAT,
-    D3D11_BLEND_FACTOR,
-    D3D11_BLEND_INV_FACTOR,
     D3D11_BLEND_OP_ADD,
     D3D11_BLEND_OP_SUBTRACT,
     D3D11_BLEND_OP_REV_SUBTRACT,
@@ -111,6 +109,7 @@ use crate::graphics::rhi::types::{
     ColorWriteMask,
     PipelineDesc,
     PipelineError,
+    StencilFaceState,
 };
 
 /// DX11 реализация Pipeline State
@@ -418,32 +417,32 @@ impl Dx11PipelineState {
     }
     
     /// Конвертирует топологию примитивов
-    fn convert_topology(topology: PrimitiveTopology) -> D3D11_PRIMITIVE_TOPOLOGY {
+    fn convert_topology(topology: PrimitiveTopology) -> u32 {
         match topology {
-            PrimitiveTopology::PointList => 1,
-            PrimitiveTopology::LineList => 2,
-            PrimitiveTopology::LineStrip => 3,
-            PrimitiveTopology::TriangleList => 4,
-            PrimitiveTopology::TriangleStrip => 5,
+            PrimitiveTopology::PointList => 1, // D3D11_PRIMITIVE_TOPOLOGY_POINTLIST
+            PrimitiveTopology::LineList => 2,  // D3D11_PRIMITIVE_TOPOLOGY_LINELIST
+            PrimitiveTopology::LineStrip => 3, // D3D11_PRIMITIVE_TOPOLOGY_LINESTRIP
+            PrimitiveTopology::TriangleList => 4,  // D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST
+            PrimitiveTopology::TriangleStrip => 5, // D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP
         }
     }
     
     /// Конвертирует фактор блендинга
-    fn convert_blend_factor(factor: BlendFactor) -> windows::Win32::Graphics::Direct3D11::D3D11_BLEND {
+    fn convert_blend_factor(factor: BlendFactor) -> u32 {
         match factor {
-            BlendFactor::Zero => D3D11_BLEND_ZERO,
-            BlendFactor::One => D3D11_BLEND_ONE,
-            BlendFactor::SrcColor => D3D11_BLEND_SRC_COLOR,
-            BlendFactor::InvSrcColor => D3D11_BLEND_INV_SRC_COLOR,
-            BlendFactor::SrcAlpha => D3D11_BLEND_SRC_ALPHA,
-            BlendFactor::InvSrcAlpha => D3D11_BLEND_INV_SRC_ALPHA,
-            BlendFactor::DstAlpha => D3D11_BLEND_DEST_ALPHA,
-            BlendFactor::InvDstAlpha => D3D11_BLEND_INV_DEST_ALPHA,
-            BlendFactor::DstColor => D3D11_BLEND_DEST_COLOR,
-            BlendFactor::InvDstColor => D3D11_BLEND_INV_DEST_COLOR,
-            BlendFactor::SrcAlphaSat => D3D11_BLEND_SRC_ALPHA_SAT,
-            BlendFactor::BlendFactor => D3D11_BLEND_FACTOR,
-            BlendFactor::InvBlendFactor => D3D11_BLEND_INV_FACTOR,
+            BlendFactor::Zero => 1,           // D3D11_BLEND_ZERO
+            BlendFactor::One => 2,            // D3D11_BLEND_ONE
+            BlendFactor::SrcColor => 3,       // D3D11_BLEND_SRC_COLOR
+            BlendFactor::InvSrcColor => 4,    // D3D11_BLEND_INV_SRC_COLOR
+            BlendFactor::SrcAlpha => 5,       // D3D11_BLEND_SRC_ALPHA
+            BlendFactor::InvSrcAlpha => 6,    // D3D11_BLEND_INV_SRC_ALPHA
+            BlendFactor::DstAlpha => 7,       // D3D11_BLEND_DEST_ALPHA
+            BlendFactor::InvDstAlpha => 8,    // D3D11_BLEND_INV_DEST_ALPHA
+            BlendFactor::DstColor => 9,       // D3D11_BLEND_DEST_COLOR
+            BlendFactor::InvDstColor => 10,   // D3D11_BLEND_INV_DEST_COLOR
+            BlendFactor::SrcAlphaSat => 11,   // D3D11_BLEND_SRC_ALPHA_SAT
+            BlendFactor::BlendFactor => 14,   // D3D11_BLEND_BLEND_FACTOR
+            BlendFactor::InvBlendFactor => 15, // D3D11_BLEND_INV_BLEND_FACTOR
         }
     }
     
