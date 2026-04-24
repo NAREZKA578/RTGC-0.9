@@ -153,6 +153,43 @@ impl RenderManager {
         Ok(())
     }
     
+    /// Начало кадра
+    pub fn begin_frame(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        if let Some(ref mut renderer) = self.renderer {
+            renderer.begin_frame()?;
+        }
+        Ok(())
+    }
+    
+    /// Конец кадра
+    pub fn end_frame(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        if let Some(ref mut renderer) = self.renderer {
+            renderer.end_frame()?;
+        }
+        Ok(())
+    }
+    
+    /// Рендеринг сцены
+    pub fn render(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        if let Some(ref mut renderer) = self.renderer {
+            // Пока рендерим пустую сцену - в будущем здесь будет логика рендеринга игрового мира
+            // Для тестирования можно добавить отладочные объекты
+        }
+        Ok(())
+    }
+    
+    /// Обновление позиции мыши для UI
+    pub fn update_mouse_position(&mut self, x: f32, y: f32) {
+        // В будущем здесь будет обновление позиции мыши в UI системе
+    }
+    
+    /// Установка режима отладки
+    pub fn set_debug_mode(&mut self, enabled: bool) {
+        if let Some(ref mut renderer) = self.renderer {
+            renderer.set_debug_mode(enabled);
+        }
+    }
+    
     /// Получить материал менеджер
     pub fn material_manager(&self) -> &MaterialManager {
         &self.material_manager

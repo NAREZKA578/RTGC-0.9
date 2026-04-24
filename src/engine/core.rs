@@ -15,7 +15,7 @@ use crate::engine::world_manager::WorldManager;
 use crate::game::debug_menu::DebugMenu;
 use crate::game::interaction::InteractionSystem;
 use crate::game::loading_manager::{LoadingManager, LoadingStage, LoadingStateDetailed};
-use crate::game::MainMenu;
+use crate::game::{MainMenu, MenuAction};
 use crate::graphics::material::MaterialManager;
 use crate::graphics::particles::ParticleSystem;
 use crate::graphics::GraphicsContext;
@@ -453,19 +453,30 @@ impl ApplicationHandler for GameApp<'_> {
                     error!(target: "engine", "Update error: {:?}", e);
                 }
 
-                // Рендеринг
+                // Рендеринг с учётом состояния движка
                 if let Some(ref mut render_manager) = self.engine.render_manager {
                     // Wrap in try-catch to prevent crashes
                     let render_result =
                         std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                            if let Err(e) = render_manager.begin_frame() {
-                                error!(target: "engine", "begin_frame error: {:?}", e);
-                            }
-                            if let Err(e) = render_manager.render() {
-                                error!(target: "engine", "Render error: {:?}", e);
-                            }
-                            if let Err(e) = render_manager.end_frame() {
-                                error!(target: "engine", "end_frame error: {:?}", e);
+                            // Используем новый метод render_frame_with_state для рендеринга с учётом состояния
+                            if let Some(renderer) = render_manager.renderer_mut() {
+                                if let Err(e) = renderer.render_frame_with_state(
+                                    &self.engine.game_state,
+                                    &self.engine.main_menu,
+                                ) {
+                                    error!(target: "engine", "Render with state error: {:?}", e);
+                                }
+                            } else {
+                                // Fallback к старому методу если renderer не инициализирован
+                                if let Err(e) = render_manager.begin_frame() {
+                                    error!(target: "engine", "begin_frame error: {:?}", e);
+                                }
+                                if let Err(e) = render_manager.render() {
+                                    error!(target: "engine", "Render error: {:?}", e);
+                                }
+                                if let Err(e) = render_manager.end_frame() {
+                                    error!(target: "engine", "end_frame error: {:?}", e);
+                                }
                             }
                         }));
 
@@ -486,6 +497,41 @@ impl ApplicationHandler for GameApp<'_> {
 }
 
 impl Engine {
+    /// Обрабатывает действия меню
+    pub fn handle_menu_action(&mut self, action: MenuAction) {
+        match action {
+            MenuAction::StartNewGame => {
+                info!(target: "engine", "Starting new game...");
+                self.game_state = EngineState::loading(
+                    crate::engine::state::LoadingResourceType::World
+                );
+            }
+            MenuAction::LoadGame => {
+                info!(target: "engine", "Loading game...");
+                // Пока просто переходим в загрузку
+                self.game_state = EngineState::loading(
+                    crate::engine::state::LoadingResourceType::World
+                );
+            }
+            MenuAction::ShowSettings => {
+                info!(target: "engine", "Opening settings...");
+                // В будущем откроем настройки
+            }
+            MenuAction::Quit => {
+                info!(target: "engine", "Quitting game...");
+                self.should_quit = true;
+            }
+            MenuAction::BackToMain => {
+                info!(target: "engine", "Returning to main menu...");
+                self.game_state = EngineState::main_menu();
+            }
+            MenuAction::ApplySetting(key, value) => {
+                info!(target: "engine", "Applying setting: {} = {}", key, value);
+                // Применение настроек
+            }
+        }
+    }
+
     /// Обновляет все системы движка
     fn update(&mut self, dt: f32) -> Result<(), Box<dyn std::error::Error>> {
         // Проверка на NaN/Inf
@@ -497,60 +543,85 @@ impl Engine {
         // Обновление ввода
         self.input_manager.update();
 
-        // Передача ввода от игрока к физике транспорта
-        let throttle = if self
-            .input_manager
-            .state()
-            .is_action_held(crate::input::mapping::InputAction::ThrottleUp)
-        {
-            1.0
-        } else if self
-            .input_manager
-            .state()
-            .is_action_held(crate::input::mapping::InputAction::ThrottleDown)
-        {
-            -1.0
-        } else {
-            0.0
-        };
-        let brake = if self
-            .input_manager
-            .state()
-            .is_action_held(crate::input::mapping::InputAction::Brake)
-        {
-            1.0
-        } else {
-            0.0
-        };
-        let steering = self
-            .input_manager
-            .state()
-            .get_action_state(crate::input::mapping::InputAction::YawLeft)
-            .map(|s| match s {
-                crate::input::input_module::ActionState::Held => -1.0,
-                _ => 0.0,
-            })
-            .unwrap_or(0.0)
-            + self
+        // Обработка действий меню в зависимости от состояния
+        if self.game_state.is_in_menu() {
+            if let Some(ref mut rm) = self.render_manager {
+                let window_size = [rm.graphics_context().width() as f32, rm.graphics_context().height() as f32];
+                if let Some(action) = self.main_menu.update(dt, &self.input_manager) {
+                    self.handle_menu_action(action);
+                }
+            }
+        }
+
+        // Обработка загрузки мира
+        if self.game_state.is_loading() {
+            self.update_loading(dt)?;
+        }
+
+        // Обработка паузы
+        if self.game_state.is_paused() {
+            // Физика и игровые системы не обновляются на паузе
+            // Но меню паузы может обрабатывать ввод
+        }
+
+        // Передача ввода от игрока к физике транспорта (только если игра активна)
+        if self.game_state.is_playing() {
+            let throttle = if self
                 .input_manager
                 .state()
-                .get_action_state(crate::input::mapping::InputAction::YawRight)
+                .is_action_held(crate::input::mapping::InputAction::ThrottleUp)
+            {
+                1.0
+            } else if self
+                .input_manager
+                .state()
+                .is_action_held(crate::input::mapping::InputAction::ThrottleDown)
+            {
+                -1.0
+            } else {
+                0.0
+            };
+            let brake = if self
+                .input_manager
+                .state()
+                .is_action_held(crate::input::mapping::InputAction::Brake)
+            {
+                1.0
+            } else {
+                0.0
+            };
+            let steering = self
+                .input_manager
+                .state()
+                .get_action_state(crate::input::mapping::InputAction::YawLeft)
                 .map(|s| match s {
-                    crate::input::input_module::ActionState::Held => 1.0,
+                    crate::input::input_module::ActionState::Held => -1.0,
                     _ => 0.0,
                 })
-                .unwrap_or(0.0);
+                .unwrap_or(0.0)
+                + self
+                    .input_manager
+                    .state()
+                    .get_action_state(crate::input::mapping::InputAction::YawRight)
+                    .map(|s| match s {
+                        crate::input::input_module::ActionState::Held => 1.0,
+                        _ => 0.0,
+                    })
+                    .unwrap_or(0.0);
 
-        self.physics_manager
-            .set_vehicle_inputs(throttle, steering, brake);
+            self.physics_manager
+                .set_vehicle_inputs(throttle, steering, brake);
+        }
 
-        // Физический шаг с фиксированным timestep
-        self.physics_accumulator += dt;
-        while self.physics_accumulator >= self.physics_timestep {
-            if let Err(e) = self.physics_manager.step(self.physics_timestep) {
-                error!(target: "physics", "Physics step error: {:?}", e);
+        // Физический шаг с фиксированным timestep (только если не на паузе)
+        if !self.game_state.is_paused() {
+            self.physics_accumulator += dt;
+            while self.physics_accumulator >= self.physics_timestep {
+                if let Err(e) = self.physics_manager.step(self.physics_timestep) {
+                    error!(target: "physics", "Physics step error: {:?}", e);
+                }
+                self.physics_accumulator -= self.physics_timestep;
             }
-            self.physics_accumulator -= self.physics_timestep;
         }
 
         // Синхронизация физики с рендером: передача позиции транспорта в камеру
@@ -572,9 +643,11 @@ impl Engine {
             rm.set_sun_direction(sun_dir);
         }
 
-        // Обновление мира
-        if let Err(e) = self.world_manager.update(dt) {
-            error!(target: "world", "World update error: {:?}", e);
+        // Обновление мира (только если не на паузе)
+        if !self.game_state.is_paused() {
+            if let Err(e) = self.world_manager.update(dt) {
+                error!(target: "world", "World update error: {:?}", e);
+            }
         }
 
         // Обновление игрового цикла
@@ -590,6 +663,52 @@ impl Engine {
         // Обновление подсистем
         self.subsystems.update(dt);
 
+        Ok(())
+    }
+
+    /// Обновление состояния загрузки
+    fn update_loading(&mut self, dt: f32) -> Result<(), Box<dyn std::error::Error>> {
+        // Увеличиваем прогресс загрузки
+        if let EngineState::Loading { progress, resource_type } = &mut self.game_state {
+            // Имитация загрузки - в реальности здесь будет асинхронная загрузка ресурсов
+            *progress += dt * 0.5; // Загрузка за ~2 секунды
+            
+            if *progress >= 1.0 {
+                *progress = 1.0;
+                info!(target: "engine", "Loading complete, switching to Playing state");
+                
+                // Переход в состояние игры
+                self.game_state = EngineState::playing(0);
+                
+                // Инициализация игрового мира
+                self.initialize_game_world()?;
+            }
+        }
+        
+        Ok(())
+    }
+
+    /// Инициализация игрового мира после загрузки
+    fn initialize_game_world(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        info!(target: "engine", "Initializing game world...");
+        
+        // Создание физического мира (если ещё не создан)
+        if self.subsystems.physics.physics_world.get().is_none() {
+            let physics_world = crate::physics::PhysicsWorld::new();
+            self.subsystems.physics.physics_world.set(physics_world);
+        }
+        
+        // Инициализация мира
+        if let Err(e) = self.world_manager.initialize_world() {
+            error!(target: "engine", "World initialization error: {:?}", e);
+        }
+        
+        // Спавн игрока/транспорта
+        let player_pos = nalgebra::Vector3::new(0.0, 10.0, 0.0);
+        self.vehicle_manager.set_player_position(player_pos);
+        
+        info!(target: "engine", "Game world initialized successfully");
+        
         Ok(())
     }
 }
