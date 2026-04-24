@@ -9,6 +9,8 @@ use crate::graphics::renderer::{
     RenderCommand, UiCommand, RendererConfig,
 };
 use crate::graphics::camera::Camera;
+use crate::graphics::terrain_renderer::TerrainRenderer;
+use crate::graphics::sky_renderer::SkyRenderer;
 use std::sync::Arc;
 
 /// Основной Renderer
@@ -21,6 +23,8 @@ pub struct Renderer {
     scene_renderer: SceneRenderer,
     ui_renderer: UIRenderer,
     debug_renderer: DebugRenderer,
+    terrain_renderer: TerrainRenderer,
+    sky_renderer: SkyRenderer,
     
     // Кэш пайплайнов
     pipeline_cache: PipelineCache,
@@ -57,6 +61,8 @@ impl Renderer {
         let mut scene_renderer = SceneRenderer::new(device.clone());
         let mut ui_renderer = UIRenderer::new(device.clone(), width, height);
         let debug_renderer = DebugRenderer::new(device.clone());
+        let mut terrain_renderer = TerrainRenderer::new(device.clone());
+        let mut sky_renderer = SkyRenderer::new(device.clone());
         
         // Инициализируем UI рендерер (шейдеры, PSO, буферы)
         ui_renderer.initialize()
@@ -66,6 +72,14 @@ impl Renderer {
         scene_renderer.initialize()
             .map_err(|e| format!("Failed to initialize Scene renderer: {}", e))?;
         
+        // Инициализируем Terrain рендерер
+        terrain_renderer.initialize()
+            .map_err(|e| format!("Failed to initialize Terrain renderer: {}", e))?;
+        
+        // Инициализируем Sky рендерер
+        sky_renderer.initialize()
+            .map_err(|e| format!("Failed to initialize Sky renderer: {}", e))?;
+        
         let mut renderer = Self {
             device: device.clone(),
             command_queue,
@@ -73,6 +87,8 @@ impl Renderer {
             scene_renderer,
             ui_renderer,
             debug_renderer,
+            terrain_renderer,
+            sky_renderer,
             pipeline_cache: PipelineCache::new(),
             main_pass: None,
             shadow_pass: None,
@@ -124,8 +140,63 @@ impl Renderer {
         // Очищаем накопленные команды в под-рендерерах
         self.debug_renderer.clear();
         self.ui_renderer.clear();
+        self.scene_renderer.clear_commands();
         
         Ok(())
+    }
+    
+    /// Обновляет террейн (добавляет/удаляет чанки)
+    pub fn update_terrain(&mut self, chunk_id: crate::world::chunk::ChunkId, chunk_data: &crate::world::chunk::ChunkData) -> Result<(), String> {
+        self.terrain_renderer.update_chunk(chunk_id, chunk_data)
+    }
+    
+    /// Удаляет чанк из рендеринга
+    pub fn remove_terrain_chunk(&mut self, chunk_id: crate::world::chunk::ChunkId) {
+        self.terrain_renderer.remove_chunk(chunk_id);
+    }
+    
+    /// Устанавливает время суток для неба
+    pub fn set_time_of_day(&mut self, time: f32) {
+        self.sky_renderer.set_time_of_day(time);
+    }
+    
+    /// Обновляет освещение из DayNightCycle
+    pub fn update_lighting_from_cycle(&mut self, cycle: &crate::world::day_night_cycle::DayNightCycle) {
+        // Получаем направление солнца
+        let sun_dir = cycle.get_sun_direction();
+        
+        // Получаем цвета неба
+        let sky_top = cycle.get_sky_color_top();
+        let sky_horizon = cycle.get_sky_color_horizon();
+        
+        // Получаем интенсивность
+        let intensity = cycle.get_ambient_intensity();
+        
+        // Вычисляем цвет солнца на основе времени суток
+        let sun_color = if cycle.is_daytime() {
+            [1.0, 0.95, 0.8]
+        } else {
+            [0.1, 0.1, 0.15]
+        };
+        
+        // Вычисляем ambient цвет
+        let ambient = [
+            sky_horizon.x * intensity * 0.3,
+            sky_horizon.y * intensity * 0.3,
+            sky_horizon.z * intensity * 0.3,
+        ];
+        
+        // Передаём в SkyRenderer
+        self.sky_renderer.set_sun_direction(sun_dir);
+        
+        // Передаём в SceneRenderer
+        self.scene_renderer.set_sun_direction(sun_dir);
+        self.scene_renderer.set_sun_params(sun_color, ambient);
+    }
+    
+    /// Получает направление солнца
+    pub fn sun_direction(&self) -> nalgebra::Vector3<f32> {
+        self.sky_renderer.sun_direction()
     }
     
     /// Рендер кадра (основной метод)
@@ -182,10 +253,11 @@ impl Renderer {
                 }
                 crate::engine::state::EngineState::Playing { .. } |
                 crate::engine::state::EngineState::Paused { .. } => {
-                    // Рендеринг 3D сцены (пока пусто - будет заполнено позже)
-                    // Если пауза, можно добавить полупрозрачный оверлей
+                    // Рендеринг 3D сцены
+                    self.render_3d_scene(&mut cmd_list)?;
+                    
+                    // Если пауза, добавляем полупрозрачный оверлей
                     if matches!(game_state, crate::engine::state::EngineState::Paused { .. }) {
-                        // Полупрозрачный оверлей
                         self.ui_renderer.render(&[UiCommand::Rect {
                             position: [0.0, 0.0],
                             size: [self.width as f32, self.height as f32],
@@ -208,6 +280,38 @@ impl Renderer {
         
         // Present
         self.end_frame()
+    }
+    
+    /// Рендерит 3D сцену (террейн, небо, объекты)
+    fn render_3d_scene(&mut self, cmd_list: &mut dyn crate::graphics::rhi::ICommandList) -> Result<(), String> {
+        use crate::graphics::renderer::scene::SceneRenderer;
+        
+        // Вычисляем плоскости фрустума
+        let view_proj = self.camera.view_proj_matrix();
+        let frustum_planes = SceneRenderer::compute_frustum_planes(&view_proj);
+        
+        // Собираем команды от SkyRenderer
+        let sky_commands = self.sky_renderer.collect_render_commands(self.camera.position);
+        for cmd in sky_commands {
+            self.scene_renderer.add_command(cmd);
+        }
+        
+        // Собираем команды от TerrainRenderer
+        let terrain_commands = self.terrain_renderer.collect_render_commands(
+            self.camera.position,
+            &frustum_planes
+        );
+        for cmd in terrain_commands {
+            self.scene_renderer.add_command(cmd);
+        }
+        
+        // TODO: Собрать команды от других объектов (пропсы, здания, транспорт)
+        
+        // Рендерим все команды через SceneRenderer
+        let all_commands = std::mem::take(&mut self.scene_renderer.command_buffer);
+        self.scene_renderer.render(&self.camera, &all_commands, cmd_list)?;
+        
+        Ok(())
     }
     
     /// Рендерит сцену
@@ -289,7 +393,16 @@ impl Renderer {
     
     /// Получает статистику pipeline cache
     pub fn pipeline_cache_stats(&self) -> crate::graphics::renderer::PipelineCacheStats {
-        // Пока заглушка - нужно добавить поле для статистики
-        crate::graphics::renderer::PipelineCacheStats::default()
+        self.pipeline_cache.stats()
+    }
+    
+    /// Получает статистику SceneRenderer
+    pub fn scene_renderer_stats(&self) -> crate::graphics::renderer::SceneRendererStats {
+        self.scene_renderer.get_stats()
+    }
+    
+    /// Получает количество отрендеренных чанков
+    pub fn rendered_chunk_count(&self) -> usize {
+        self.terrain_renderer.rendered_chunk_count()
     }
 }

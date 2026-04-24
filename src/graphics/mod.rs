@@ -13,15 +13,21 @@ pub mod mesh;
 pub mod font;
 pub mod resources;
 pub mod texture;
+pub mod terrain_mesh_builder;
+pub mod terrain_renderer;
+pub mod sky_renderer;
 
 pub use camera::Camera;
 pub use material::{MaterialManager, TextureQuality};
 pub use particles::ParticleSystem;
-pub use renderer::{Renderer, RenderCommand, UiCommand, RendererConfig};
+pub use renderer::{Renderer, RenderCommand, UiCommand, RendererConfig, SceneRenderer, SceneRendererStats};
 pub use gl_context::{GlContext, GraphicsContext};
 pub use shader::{load_shader_from_file, load_vertex_shader, load_fragment_shader};
 pub use mesh::{Mesh, SimpleVertex};
 pub use font::{FontAtlas, FontManager, GlyphData};
+pub use terrain_mesh_builder::TerrainMeshBuilder;
+pub use terrain_renderer::TerrainRenderer;
+pub use sky_renderer::SkyRenderer;
 
 /// Универсальный графический контекст
 pub enum GraphicsContext {
