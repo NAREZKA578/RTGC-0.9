@@ -4,6 +4,7 @@
 
 use std::sync::Arc;
 use std::fmt;
+use std::any::Any;
 
 /// Resource handle for GPU resources
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -930,6 +931,92 @@ impl Default for DepthStencilState {
 // Re-export IDevice and ICommandList as RhiDevice and RhiCommandList for backwards compatibility
 pub use super::device::IDevice as RhiDevice;
 pub use super::device::ICommandList as RhiCommandList;
+
+// Pipeline state types for DX11 pipeline_dx11.rs
+use thiserror::Error;
+
+#[derive(Debug, Error)]
+pub enum PipelineError {
+    #[error("Pipeline creation failed: {0}")]
+    CreationFailed(String),
+    #[error("Shader compilation failed: {0}")]
+    ShaderCompilationFailed(String),
+    #[error("Invalid configuration: {0}")]
+    InvalidConfiguration(String),
+}
+
+pub trait IPipelineState: Any + Send + Sync {
+    fn bind(&self, context: &mut dyn Any) -> Result<(), PipelineError>;
+    fn set_primitive_topology(&mut self, topology: PrimitiveTopology);
+    fn set_blend_constants(&mut self, factors: [f32; 4]);
+    fn set_stencil_reference(&mut self, reference: u32);
+}
+
+pub trait IShader: Any + Send + Sync {
+    fn get_name(&self) -> &str;
+    fn get_stage(&self) -> ShaderStage;
+    fn get_bytecode(&self) -> &[u8];
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum InputElementFormat {
+    #[default]
+    Float32x2,
+    Float32x3,
+    Float32x4,
+    UInt8x4,
+    Int8x4,
+    UInt16x2,
+    UInt16x4,
+    Int16x2,
+    Int16x4,
+    UInt32,
+    UInt32x2,
+    UInt32x4,
+    Int32,
+    Int32x2,
+    Int32x4,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum InputElementSemantic {
+    Position,
+    Normal,
+    Tangent,
+    Binormal,
+    Color(u32),
+    TexCoord(u32),
+    Custom(String),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum BlendFactor {
+    #[default]
+    Zero,
+    One,
+    SrcColor,
+    InvSrcColor,
+    SrcAlpha,
+    InvSrcAlpha,
+    DstAlpha,
+    InvDstAlpha,
+    DstColor,
+    InvDstColor,
+    SrcAlphaSat,
+    BlendFactor,
+    InvBlendFactor,
+}
+
+bitflags::bitflags! {
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+    pub struct ColorWriteMask: u8 {
+        const RED = 1 << 0;
+        const GREEN = 1 << 1;
+        const BLUE = 1 << 2;
+        const ALPHA = 1 << 3;
+        const ALL = Self::RED.bits() | Self::GREEN.bits() | Self::BLUE.bits() | Self::ALPHA.bits();
+    }
+}
 
 /// RHI Buffer trait alias
 pub trait RhiBuffer: Send + Sync {}

@@ -1,9 +1,6 @@
 // ЧАСТЬ 1 — HUD: ЕДИНЫЙ ЦЕНТР ИНФОРМАЦИИ
 // Весь HUD хранится в одном месте, управляется единым HudManager.
 
-use crate::game::{InventoryItem, ItemType};
-use nalgebra::{UnitQuaternion, Vector3};
-
 /// Все данные для HUD — заполняются движком, рисуются HudManager
 #[derive(Debug, Clone, Default)]
 pub struct VehicleHudData {

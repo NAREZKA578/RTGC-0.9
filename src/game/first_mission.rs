@@ -3,6 +3,7 @@
 
 use crate::game::events::{publish_event, GameEvent};
 use crate::game::skills::SkillType;
+use crate::network::GameState;
 use std::time::Duration;
 
 /// Mission states for the first contract
@@ -257,7 +258,7 @@ impl FirstMissionManager {
     }
 
     /// Get mission reward if completed
-    pub fn claim_reward(&mut self, game_state: &mut crate::game::GameState) -> Option<f64> {
+    pub fn claim_reward(&mut self, game_state: &mut GameState) -> Option<f64> {
         if self.mission.state == FirstMissionState::Completed {
             let reward = self.mission.reward_rub;
             self.mission.state = FirstMissionState::Claimed;

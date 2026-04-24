@@ -3,7 +3,6 @@
 //! Uses shader reflection to generate Input Layout automatically
 
 use std::ffi::c_void;
-use std::sync::Arc;
 use tracing::{error, info, warn};
 
 use crate::graphics::rhi::device::*;
@@ -12,24 +11,23 @@ use crate::graphics::rhi::RhiResult;
 
 #[cfg(target_os = "windows")]
 use windows::{
-    core::{ComInterface, Interface as WinInterface},
+    core::PCSTR,
     Win32::Graphics::Direct3D::{
-        D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST, D3D_SHADER_MACRO,
+        D3D_SHADER_MACRO,
     },
     Win32::Graphics::Direct3D11::{
-        D3D11_INPUT_ELEMENT_DESC, D3D11_INPUT_SIGNATURE_DESC, ID3D11InputLayout,
+        D3D11_INPUT_ELEMENT_DESC, ID3D11InputLayout,
         ID3D11VertexShader, ID3D11PixelShader, ID3D11ComputeShader,
         ID3D11GeometryShader, ID3D11HullShader, ID3D11DomainShader,
         D3D11_INPUT_PER_VERTEX_DATA,
     },
     Win32::Graphics::Dxgi::Common::{
-        DXGI_FORMAT_R32_FLOAT, DXGI_FORMAT_R32G32_FLOAT, DXGI_FORMAT_R32G32B32_FLOAT,
-        DXGI_FORMAT_R32G32B32A32_FLOAT, DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_FORMAT_UNKNOWN,
+        DXGI_FORMAT_R32G32_FLOAT, DXGI_FORMAT_R32G32B32_FLOAT,
+        DXGI_FORMAT_R32G32B32A32_FLOAT, DXGI_FORMAT_R8G8B8A8_UNORM,
     },
     Win32::System::LibraryLoader::{
-        GetModuleHandleW, GetProcAddress, HINSTANCE,
+        GetModuleHandleW, GetProcAddress,
     },
-    core::PCSTR,
 };
 
 /// DX11 Shader resource containing compiled shaders and input layout
@@ -466,8 +464,6 @@ impl Dx11Shader {
         vertex_bytecode: &[u8],
         custom_layout: Option<&InputLayout>,
     ) -> RhiResult<Option<ID3D11InputLayout>> {
-        use windows::Win32::Graphics::Direct3D::Reflect;
-        
         info!(target: "dx11.shader", "Creating input layout from vertex shader reflection");
         
         // Use custom layout if provided, otherwise try to derive from shader

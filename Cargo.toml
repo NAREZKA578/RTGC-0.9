@@ -73,6 +73,8 @@ anyhow = "1.0"
 bytemuck = "1.18"
 bitflags = "2.6"
 once_cell = "1.19"
+ab_glyph = "0.2"
+uuid = { version = "0.8", features = ["v4"] }
 
 # Graphics (OpenGL)
 glow = "0.13"

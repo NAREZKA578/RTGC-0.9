@@ -167,7 +167,7 @@ impl MainMenu {
             );
             
             // Проверка нажатия (используем левую кнопку мыши - MouseButton::Left)
-            use crate::input::MouseButton;
+            use crate::input::input_module::MouseButton;
             if button.is_hovered && state.is_mouse_button_pressed(MouseButton::Left) {
                 button.is_pressed = true;
             } else if button.is_pressed && !state.is_mouse_button_down(MouseButton::Left) {

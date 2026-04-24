@@ -1163,5 +1163,4 @@ impl ISwapChain for GlSwapChainInternal {
     }
 }
 
-// Add Any support for downcasting
-impl std::any::Any for GlSwapChainInternal {}
+// Any support is provided by the dyn Any trait on ISwapChain

@@ -14,11 +14,11 @@ use windows::{
     Win32::Graphics::Dxgi::{
         IDXGIFactory1, IDXGISwapChain1, DXGI_PRESENT_ALLOW_TEARING, DXGI_SCALING_STRETCH,
         DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING, DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT,
-        DXGI_SWAP_EFFECT_FLIP_DISCARD,
+        DXGI_SWAP_EFFECT_FLIP_DISCARD, DXGI_SWAP_CHAIN_DESC1, DXGI_USAGE,
     },
     Win32::Graphics::Dxgi::Common::{
         DXGI_FORMAT, DXGI_FORMAT_B8G8R8A8_UNORM, DXGI_FORMAT_R8G8B8A8_UNORM,
-        DXGI_SAMPLE_DESC, DXGI_USAGE_RENDER_TARGET_OUTPUT,
+        DXGI_SAMPLE_DESC,
     },
 };
 
@@ -99,13 +99,13 @@ impl Dx11SwapChain {
             };
 
             // Create swap chain description
-            let swap_desc = windows::Win32::Graphics::Dxgi::Common::DXGI_SWAP_CHAIN_DESC1 {
+            let swap_desc = DXGI_SWAP_CHAIN_DESC1 {
                 Width: width,
                 Height: height,
                 Format: dxgi_format,
                 Stereo: false.into(),
                 SampleDesc: sample_desc,
-                BufferUsage: DXGI_USAGE_RENDER_TARGET_OUTPUT,
+                BufferUsage: DXGI_USAGE(0x00000001u32), // DXGI_USAGE_RENDER_TARGET_OUTPUT
                 BufferCount: 2, // Double buffering
                 Scaling: DXGI_SCALING_STRETCH,
                 SwapEffect: DXGI_SWAP_EFFECT_FLIP_DISCARD,
@@ -181,8 +181,10 @@ impl Dx11SwapChain {
         match format {
             TextureFormat::R8G8B8A8Unorm => DXGI_FORMAT_R8G8B8A8_UNORM,
             TextureFormat::Bgra8Unorm => DXGI_FORMAT_B8G8R8A8_UNORM,
-            TextureFormat::Bgra8UnormSrgb => DXGI_FORMAT_B8G8R8A8_UNORM_SRGB,
-            TextureFormat::R8G8B8A8UnormSrgb => DXGI_FORMAT_R8G8B8A8_UNORM_SRGB,
+            TextureFormat::Bgra8UnormSrgb | TextureFormat::R8G8B8A8UnormSrgb => {
+                warn!(target: "dx11", "Srgb format mapping - using non-SRGB variant");
+                DXGI_FORMAT_B8G8R8A8_UNORM
+            }
             _ => {
                 warn!(target: "dx11", "Unknown texture format {:?}, defaulting to B8G8R8A8_UNORM", format);
                 DXGI_FORMAT_B8G8R8A8_UNORM

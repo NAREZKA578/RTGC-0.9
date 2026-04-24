@@ -2,7 +2,7 @@
 //! 
 //! Использует RHI для абстракции над графическим бэкендом
 
-use crate::graphics::rhi::{IDevice, ICommandQueue, ISwapChain, ResourceHandle};
+use crate::graphics::rhi::{IDevice, ICommandQueue, ISwapChain, ICommandList, ResourceHandle};
 use crate::graphics::renderer::{
     SceneRenderer, UIRenderer, DebugRenderer, PipelineCache,
     MainRenderPass, ShadowRenderPass, PostProcessRenderPass,

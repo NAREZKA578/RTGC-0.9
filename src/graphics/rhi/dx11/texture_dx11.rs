@@ -14,10 +14,9 @@ use windows::{
         D3D11_TEXTURE2D_DESC, D3D11_SHADER_RESOURCE_VIEW_DESC,
         D3D11_RENDER_TARGET_VIEW_DESC, D3D11_DEPTH_STENCIL_VIEW_DESC,
         D3D11_SAMPLER_DESC,
-        D3D11_USAGE_DEFAULT, D3D11_USAGE_DYNAMIC, D3D11_USAGE_IMMUTABLE,
+        D3D11_USAGE_DEFAULT,
         D3D11_BIND_SHADER_RESOURCE, D3D11_BIND_RENDER_TARGET, D3D11_BIND_DEPTH_STENCIL,
-        D3D11_CPU_ACCESS_WRITE, D3D11_CPU_ACCESS_READ,
-        D3D11_RESOURCE_MISC_GENERATE_MIPS, D3D11_RESOURCE_MISC_NONE,
+        D3D11_RESOURCE_MISC_GENERATE_MIPS,
         ID3D11Texture2D, ID3D11ShaderResourceView, ID3D11RenderTargetView,
         ID3D11DepthStencilView, ID3D11SamplerState,
         D3D11_SRV_DIMENSION_TEXTURE2D, D3D11_RTV_DIMENSION_TEXTURE2D,
@@ -37,7 +36,6 @@ use windows::{
         DXGI_FORMAT_D32_FLOAT, DXGI_FORMAT_D24_UNORM_S8_UINT,
         DXGI_FORMAT_D16_UNORM, DXGI_FORMAT_BC1_UNORM, DXGI_FORMAT_BC3_UNORM,
     },
-    core::Interface,
 };
 
 /// DX11 Texture resource
@@ -153,7 +151,7 @@ impl Dx11Texture {
         }
         
         // Determine misc flags
-        let mut misc_flags = D3D11_RESOURCE_MISC_NONE.0;
+        let mut misc_flags = 0u32;
         if desc.mip_levels > 1 && desc.usage.contains(TextureUsage::SHADER_READ) {
             misc_flags |= D3D11_RESOURCE_MISC_GENERATE_MIPS.0;
         }
@@ -319,7 +317,7 @@ impl Dx11Texture {
         let dsv_desc = D3D11_DEPTH_STENCIL_VIEW_DESC {
             Format: dxgi_depth_format_from_rhi(format),
             ViewDimension: D3D11_DSV_DIMENSION_TEXTURE2D,
-            Flags: windows::Win32::Graphics::Direct3D11::D3D11_DSV_FLAG_NONE,
+            Flags: windows::Win32::Graphics::Direct3D11::D3D11_DSV_FLAG(0),
             Anonymous: windows::Win32::Graphics::Direct3D11::D3D11_DEPTH_STENCIL_VIEW_DESC_0 {
                 Texture2D: windows::Win32::Graphics::Direct3D11::D3D11_TEX2D_DSV {
                     MipSlice: 0,
@@ -414,7 +412,7 @@ impl Dx11Sampler {
             (FilterMode::Point, FilterMode::Point, FilterMode::Point, _) => D3D11_FILTER_MIN_MAG_MIP_POINT,
             (FilterMode::Bilinear, FilterMode::Bilinear, FilterMode::Point, _) => D3D11_FILTER_MIN_MAG_LINEAR_MIP_POINT,
             (FilterMode::Bilinear, FilterMode::Bilinear, FilterMode::Bilinear, _) => D3D11_FILTER_MIN_MAG_MIP_LINEAR,
-            (FilterMode::Anisotropic, _, _, _) | (_, _, _, a) if a > 1 => D3D11_FILTER_ANISOTROPIC,
+            _ if desc.max_anisotropy > 1 => D3D11_FILTER_ANISOTROPIC,
             _ => D3D11_FILTER_MIN_MAG_MIP_LINEAR,
         };
         

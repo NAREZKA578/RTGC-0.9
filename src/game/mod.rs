@@ -52,7 +52,7 @@ pub use interaction::{
 pub use inventory::{
     Inventory, InventoryItem, InventorySlot, ItemType, MAX_INVENTORY_SLOTS, MAX_INVENTORY_WEIGHT,
 };
-pub use main_menu::{MainMenu, MenuAction, MenuButton, MenuRenderData, MenuState};
+pub use main_menu::{MainMenu, MenuAction, MenuButton, MenuState};
 pub use map_system::{MapMarker, MapSystem, MarkerType};
 pub use mission_generator::{CargoType, Mission, MissionGenerator};
 pub use mission_save::{MissionSaveManager, SaveGame};
@@ -73,7 +73,7 @@ pub use storage::{
     MAX_STORAGE_HEIGHT, MAX_STORAGE_SLOTS, MAX_STORAGE_WIDTH,
 };
 pub use ui::{
-    HUDData, MinimapData, Notification, NotificationType, UIManager, UIVisibility, Waypoint,
+    HUDData, MinimapData, Notification, NotificationType, UIManager, UIVisibility,
     WaypointType,
 };
 pub use vehicle_parts::{
