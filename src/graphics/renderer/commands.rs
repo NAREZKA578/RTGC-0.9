@@ -20,6 +20,25 @@ pub enum RenderCommand {
         material: ResourceHandle,
         transforms: Vec<Matrix4<f32>>,
     },
+    /// Отрисовка чанка террейна
+    TerrainChunk {
+        chunk_id: (i32, i32),
+        mesh: ResourceHandle,
+        material: ResourceHandle,
+        transform: Matrix4<f32>,
+        lod: u32,
+    },
+    /// Небо (скайбокс или процедурное)
+    Skybox {
+        texture: Option<ResourceHandle>,
+        sun_direction: [f32; 3],
+    },
+    /// Солнце (визуальное представление)
+    Sun {
+        direction: [f32; 3],
+        angular_radius: f32,
+        color: [f32; 3],
+    },
     /// Отрисовка линий (для отладки)
     LineList {
         vertices: Vec<[f32; 3]>,

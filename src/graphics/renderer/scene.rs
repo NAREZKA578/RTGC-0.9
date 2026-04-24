@@ -5,7 +5,7 @@
 use crate::graphics::rhi::{IDevice, ICommandList, ResourceHandle, BufferDescription, BufferType, BufferUsage, ResourceState};
 use crate::graphics::renderer::commands::RenderCommand;
 use crate::graphics::camera::Camera;
-use nalgebra::Matrix4;
+use nalgebra::{Matrix4, Vector3};
 use std::sync::Arc;
 use bytemuck;
 use tracing;
@@ -54,6 +54,32 @@ impl Default for LightBuffer {
     }
 }
 
+/// Константный буфер для модели (трансформация объекта)
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct ModelBuffer {
+    pub model: Matrix4<f32>,
+    pub normal_matrix: Matrix4<f32>,
+    pub material_params: [f32; 4], // roughness, metallic, padding, padding
+}
+
+impl Default for ModelBuffer {
+    fn default() -> Self {
+        Self {
+            model: Matrix4::identity(),
+            normal_matrix: Matrix4::identity(),
+            material_params: [0.5, 0.0, 0.0, 0.0],
+        }
+    }
+}
+
+/// Данные для сортировки команд рендеринга
+struct RenderSortKey {
+    material: ResourceHandle,
+    distance_sq: f32,
+    command_index: usize,
+}
+
 /// Scene Renderer
 pub struct SceneRenderer {
     device: Arc<dyn IDevice>,
@@ -62,6 +88,21 @@ pub struct SceneRenderer {
     pipeline_cache: std::collections::HashMap<String, ResourceHandle>,
     camera_data: CameraBuffer,
     light_data: LightBuffer,
+    
+    // Буфер для команд рендеринга
+    pub(crate) command_buffer: Vec<RenderCommand>,
+    
+    // Статистика
+    stats: SceneRendererStats,
+}
+
+/// Статистика рендерера сцены
+#[derive(Debug, Clone, Default)]
+pub struct SceneRendererStats {
+    pub draw_calls: u32,
+    pub triangle_count: u32,
+    pub terrain_chunks_rendered: u32,
+    pub skybox_rendered: bool,
 }
 
 impl SceneRenderer {
@@ -73,6 +114,8 @@ impl SceneRenderer {
             pipeline_cache: std::collections::HashMap::new(),
             camera_data: CameraBuffer::default(),
             light_data: LightBuffer::default(),
+            command_buffer: Vec::with_capacity(256),
+            stats: SceneRendererStats::default(),
         }
     }
     
@@ -107,6 +150,17 @@ impl SceneRenderer {
         Ok(())
     }
     
+    /// Очищает буфер команд перед новым кадром
+    pub fn clear_commands(&mut self) {
+        self.command_buffer.clear();
+        self.stats = SceneRendererStats::default();
+    }
+    
+    /// Добавляет команду в буфер
+    pub fn add_command(&mut self, command: RenderCommand) {
+        self.command_buffer.push(command);
+    }
+    
     /// Обновляет данные камеры
     pub fn update_camera(&mut self, camera: &Camera) {
         self.camera_data.view = camera.view_matrix();
@@ -123,6 +177,97 @@ impl SceneRenderer {
     /// Устанавливает параметры освещения
     pub fn set_sun_direction(&mut self, direction: nalgebra::Vector3<f32>) {
         self.light_data.sun_direction = [direction.x, direction.y, direction.z, 0.0];
+    }
+    
+    /// Устанавливает параметры солнца
+    pub fn set_sun_params(&mut self, color: [f32; 3], ambient: [f32; 3]) {
+        self.light_data.sun_color = [color[0], color[1], color[2], 1.0];
+        self.light_data.ambient_color = [ambient[0], ambient[1], ambient[2], 1.0];
+    }
+    
+    /// Вычисляет плоскости фрустума из матрицы view_proj
+    pub fn compute_frustum_planes(view_proj: &Matrix4<f32>) -> [[f32; 4]; 6] {
+        let m = view_proj.as_ref();
+        
+        // Извлекаем плоскости (левая, правая, нижняя, верхняя, ближняя, дальняя)
+        [
+            // Left plane
+            [
+                m[3] + m[0],
+                m[7] + m[4],
+                m[11] + m[8],
+                m[15] + m[12],
+            ],
+            // Right plane
+            [
+                m[3] - m[0],
+                m[7] - m[4],
+                m[11] - m[8],
+                m[15] - m[12],
+            ],
+            // Bottom plane
+            [
+                m[3] + m[1],
+                m[7] + m[5],
+                m[11] + m[9],
+                m[15] + m[13],
+            ],
+            // Top plane
+            [
+                m[3] - m[1],
+                m[7] - m[5],
+                m[11] - m[9],
+                m[15] - m[13],
+            ],
+            // Near plane
+            [
+                m[3] + m[2],
+                m[7] + m[6],
+                m[11] + m[10],
+                m[15] + m[14],
+            ],
+            // Far plane
+            [
+                m[3] - m[2],
+                m[7] - m[6],
+                m[11] - m[10],
+                m[15] - m[14],
+            ],
+        ]
+    }
+    
+    /// Проверяет пересечение сферы с фрустумом
+    pub fn sphere_in_frustum(center: &Vector3<f32>, radius: f32, planes: &[[f32; 4]; 6]) -> bool {
+        for plane in planes.iter() {
+            let distance = plane[0] * center.x + plane[1] * center.y + plane[2] * center.z + plane[3];
+            if distance < -radius {
+                return false;
+            }
+        }
+        true
+    }
+    
+    /// Сортирует команды для оптимального рендеринга
+    fn sort_commands(&mut self, camera_pos: &Vector3<f32>) {
+        // Разделяем на непрозрачные и прозрачные
+        // Сортируем непрозрачные по материалу и расстоянию (front-to-back)
+        // Сортируем прозрачные по расстоянию (back-to-front)
+        
+        // Пока простая реализация - сортировка по материалу
+        self.command_buffer.sort_by(|a, b| {
+            let mat_a = match (a, b) {
+                (RenderCommand::Mesh { material: ma, .. }, _) => Some(*ma),
+                (RenderCommand::TerrainChunk { material: ma, .. }, _) => Some(*ma),
+                _ => None,
+            };
+            let mat_b = match b {
+                RenderCommand::Mesh { material: mb, .. } => Some(*mb),
+                RenderCommand::TerrainChunk { material: mb, .. } => Some(*mb),
+                _ => None,
+            };
+            
+            mat_a.cmp(&mat_b)
+        });
     }
     
     /// Рендерит сцену через command list
@@ -144,30 +289,98 @@ impl SceneRenderer {
                 .map_err(|e| format!("Failed to update light buffer: {:?}", e))?;
         }
         
-        // Сортируем команды по материалам для минимизации смены состояний
-        // В полной реализации здесь будет batching и sorting
+        // Вычисляем плоскости фрустума для culling
+        let frustum_planes = Self::compute_frustum_planes(&self.camera_data.view_proj);
+        let camera_pos = camera.position;
+        
+        // Собираем команды с frustum culling
+        let mut render_commands = Vec::with_capacity(commands.len());
+        
+        for command in commands {
+            match command {
+                RenderCommand::TerrainChunk { chunk_id, mesh, material, transform, lod } => {
+                    // Простая проверка видимости чанка
+                    let chunk_world_pos = Vector3::new(
+                        chunk_id.0 as f32 * 64.0 + 32.0,
+                        0.0,
+                        chunk_id.1 as f32 * 64.0 + 32.0,
+                    );
+                    let bounding_radius = 64.0; // Примерный радиус чанка
+                    
+                    if Self::sphere_in_frustum(&chunk_world_pos, bounding_radius, &frustum_planes) {
+                        render_commands.push(command.clone());
+                        self.stats.terrain_chunks_rendered += 1;
+                    }
+                }
+                RenderCommand::Skybox { .. } => {
+                    // Скайбокс всегда рендерится
+                    render_commands.push(command.clone());
+                    self.stats.skybox_rendered = true;
+                }
+                RenderCommand::Sun { .. } => {
+                    // Солнце всегда рендерится
+                    render_commands.push(command.clone());
+                }
+                RenderCommand::Mesh { mesh, material, transform } => {
+                    // TODO: frustum culling для мешей
+                    render_commands.push(command.clone());
+                }
+                RenderCommand::MeshInstanced { mesh, material, transforms } => {
+                    render_commands.push(command.clone());
+                }
+                RenderCommand::LineList { vertices, colors } => {
+                    render_commands.push(command.clone());
+                }
+            }
+        }
+        
+        // Сортируем команды
+        self.sort_commands(&camera_pos);
         
         // Рендерим каждую команду
-        for command in commands {
+        for command in &render_commands {
             match command {
                 RenderCommand::Mesh { mesh, material, transform } => {
                     // TODO: установить константный буфер с трансформацией
                     // TODO: забиндить материал и меш
                     // TODO: вызвать draw
                     tracing::debug!("Rendering mesh with material {:?}", material);
+                    self.stats.draw_calls += 1;
                 }
                 RenderCommand::MeshInstanced { mesh, material, transforms } => {
                     // TODO: инстансированный рендеринг
                     tracing::debug!("Rendering {} instances with material {:?}", transforms.len(), material);
+                    self.stats.draw_calls += 1;
+                }
+                RenderCommand::TerrainChunk { chunk_id, mesh, material, transform, lod } => {
+                    // Рендеринг чанка террейна
+                    tracing::debug!("Rendering terrain chunk {:?} at LOD {}", chunk_id, lod);
+                    self.stats.draw_calls += 1;
+                }
+                RenderCommand::Skybox { texture, sun_direction } => {
+                    // Рендеринг неба
+                    tracing::debug!("Rendering skybox with sun direction {:?}", sun_direction);
+                    self.stats.draw_calls += 1;
+                }
+                RenderCommand::Sun { direction, angular_radius, color } => {
+                    // Рендеринг солнца
+                    tracing::debug!("Rendering sun at direction {:?}", direction);
+                    self.stats.draw_calls += 1;
                 }
                 RenderCommand::LineList { vertices, colors } => {
                     // TODO: отрисовка линий (можно использовать DebugRenderer)
                     tracing::debug!("Rendering {} line vertices", vertices.len());
+                    self.stats.draw_calls += 1;
                 }
             }
         }
         
         Ok(())
+    }
+    
+    /// Получает статистику рендеринга
+    pub fn get_stats(&self) -> SceneRendererStats {
+        self.stats.clone()
     }
     
     /// Получает или создаёт пайплайн из кэша

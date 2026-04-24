@@ -18,7 +18,7 @@ pub use commands::{RenderCommand, UiCommand, RendererConfig};
 pub use debug::DebugRenderer;
 pub use passes::{RenderPass, MainPass, ShadowPass, PostProcessPass, MainRenderPass, ShadowRenderPass, PostProcessRenderPass};
 pub use pipeline_cache::{PipelineCache, PipelineKey, PipelineCacheStats};
-pub use scene::SceneRenderer;
+pub use scene::{SceneRenderer, SceneRendererStats};
 pub use ui::UIRenderer;
 pub use renderer::Renderer;
 pub use crate::graphics::mesh::Mesh;

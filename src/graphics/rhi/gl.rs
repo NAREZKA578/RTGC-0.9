@@ -166,6 +166,27 @@ impl GlDevice {
     fn generate_handle(&self) -> ResourceHandle {
         ResourceHandle(self.resource_counter.fetch_add(1, Ordering::Relaxed))
     }
+    
+    /// Создаёт mock-устройство для тестов
+    #[cfg(test)]
+    pub fn mock() -> Self {
+        use std::sync::Arc;
+        // Создаём минимальный контекст для тестов
+        // В реальности это требует активного OpenGL контекста
+        // Для тестов используем заглушку
+        Self {
+            context: Arc::new(Context::default()),
+            resource_counter: AtomicU64::new(1),
+            device_name: "Mock OpenGL Device".to_string(),
+            features: DeviceFeatures::default(),
+            limits: DeviceLimits::default(),
+            buffers: Mutex::new(HashMap::new()),
+            textures: Mutex::new(HashMap::new()),
+            samplers: Mutex::new(HashMap::new()),
+            shaders: Mutex::new(HashMap::new()),
+            pipelines: Mutex::new(HashMap::new()),
+        }
+    }
 
     fn query_features(ctx: &Context) -> DeviceFeatures {
         DeviceFeatures {
