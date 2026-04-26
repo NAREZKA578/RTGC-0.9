@@ -25,6 +25,7 @@ pub mod input_manager;
 pub mod game_loop_manager;
 pub mod render_manager;
 
+pub use crate::config::Config;
 pub use core::*;
 pub use state::*;
 pub use subsystems::*;

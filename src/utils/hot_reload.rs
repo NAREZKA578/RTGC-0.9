@@ -1,7 +1,6 @@
 //! Hot reload functionality stub module
 //! TODO: Implement hot reload for dev_tools feature
 
-use std::path::Path;
 use std::time::Duration;
 
 pub struct HotReloadConfig {

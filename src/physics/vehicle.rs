@@ -2,7 +2,7 @@
 
 use crate::physics::physics_module::RigidBody;
 use crate::physics::SurfaceType;
-use nalgebra::{Matrix3, Quaternion, UnitQuaternion, Vector3};
+use nalgebra::{Matrix3, UnitQuaternion, Vector3};
 
 /// Vehicle configuration
 #[derive(Debug, Clone)]

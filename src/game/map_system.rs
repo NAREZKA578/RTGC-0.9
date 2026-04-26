@@ -1,8 +1,6 @@
 // Map system for RTGC-0.8
 // Handles paper map item, full-screen map view, and custom markers
 
-use crate::game::player::Player;
-use crate::ui::hud::HudManager;
 use serde::{Deserialize, Serialize};
 
 /// Marker type for custom player markers

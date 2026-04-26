@@ -135,6 +135,7 @@ impl Dx12Buffer {
             size,
             usage: BufferUsage::CONSTANT_BUFFER | BufferUsage::TRANSFER_DST,
             initial_state: ResourceState::GenericRead,
+            initial_data: None,
         };
         
         Ok(Self {

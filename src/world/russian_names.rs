@@ -44,7 +44,7 @@ pub fn generate_name(seed: u64) -> String {
 
 /// Generate a name with specific characteristics (for debugging/testing)
 pub fn generate_name_variants(seed: u64, count: usize) -> Vec<String> {
-    let mut rng = ChaCha8Rng::seed_from_u64(seed);
+    let _rng = ChaCha8Rng::seed_from_u64(seed);
     let mut names = Vec::with_capacity(count);
 
     for i in 0..count {

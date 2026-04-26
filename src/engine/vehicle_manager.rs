@@ -232,6 +232,11 @@ impl VehicleManager {
             .map(|v| v.forward())
             .unwrap_or(Vector3::z())
     }
+
+    /// Устанавливает позицию спавна игрока
+    pub fn set_player_position(&mut self, position: Vector3<f32>) {
+        self.default_spawn_position = position;
+    }
 }
 
 #[cfg(test)]

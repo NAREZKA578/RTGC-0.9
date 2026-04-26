@@ -2,7 +2,7 @@
 //! 
 //! Владеет постоянными буферами (view_proj, light), сортирует команды по материалам
 
-use crate::graphics::rhi::{IDevice, ICommandList, ResourceHandle, BufferDescription, BufferType, BufferUsage, ResourceState};
+use crate::graphics::rhi::{IDevice, ResourceHandle, BufferDescription, BufferType, BufferUsage, ResourceState, CommandListGuard};
 use crate::graphics::renderer::commands::RenderCommand;
 use crate::graphics::camera::Camera;
 use nalgebra::{Matrix4, Vector3};
@@ -19,6 +19,8 @@ pub struct CameraBuffer {
     pub proj: Matrix4<f32>,
     pub camera_position: [f32; 4],
 }
+
+unsafe impl bytemuck::NoUninit for CameraBuffer {}
 
 impl Default for CameraBuffer {
     fn default() -> Self {
@@ -41,6 +43,8 @@ pub struct LightBuffer {
     pub num_lights: u32,
     pub _padding: [u32; 3],
 }
+
+unsafe impl bytemuck::NoUninit for LightBuffer {}
 
 impl Default for LightBuffer {
     fn default() -> Self {
@@ -127,6 +131,7 @@ impl SceneRenderer {
             size: std::mem::size_of::<CameraBuffer>() as u64,
             usage: BufferUsage::CONSTANT_BUFFER | BufferUsage::DYNAMIC,
             initial_state: ResourceState::ConstantBuffer,
+            initial_data: None,
         };
         
         self.camera_buffer = Some(
@@ -140,6 +145,7 @@ impl SceneRenderer {
             size: std::mem::size_of::<LightBuffer>() as u64,
             usage: BufferUsage::CONSTANT_BUFFER | BufferUsage::DYNAMIC,
             initial_state: ResourceState::ConstantBuffer,
+            initial_data: None,
         };
         
         self.light_buffer = Some(
@@ -187,52 +193,33 @@ impl SceneRenderer {
     
     /// Вычисляет плоскости фрустума из матрицы view_proj
     pub fn compute_frustum_planes(view_proj: &Matrix4<f32>) -> [[f32; 4]; 6] {
-        let m = view_proj.as_ref();
+        let m = view_proj.as_slice();
         
-        // Извлекаем плоскости (левая, правая, нижняя, верхняя, ближняя, дальняя)
+        fn add_rows(a: [f32; 4], b: [f32; 4]) -> [f32; 4] {
+            [a[0] + b[0], a[1] + b[1], a[2] + b[2], a[3] + b[3]]
+        }
+        fn sub_rows(a: [f32; 4], b: [f32; 4]) -> [f32; 4] {
+            [a[0] - b[0], a[1] - b[1], a[2] - b[2], a[3] - b[3]]
+        }
+        
+        let row = |i: usize| -> [f32; 4] { 
+            let idx = i * 4;
+            [m[idx], m[idx + 1], m[idx + 2], m[idx + 3]]
+        };
+        
         [
             // Left plane
-            [
-                m[3] + m[0],
-                m[7] + m[4],
-                m[11] + m[8],
-                m[15] + m[12],
-            ],
+            add_rows(row(3), row(0)),
             // Right plane
-            [
-                m[3] - m[0],
-                m[7] - m[4],
-                m[11] - m[8],
-                m[15] - m[12],
-            ],
+            sub_rows(row(3), row(0)),
             // Bottom plane
-            [
-                m[3] + m[1],
-                m[7] + m[5],
-                m[11] + m[9],
-                m[15] + m[13],
-            ],
+            add_rows(row(3), row(1)),
             // Top plane
-            [
-                m[3] - m[1],
-                m[7] - m[5],
-                m[11] - m[9],
-                m[15] - m[13],
-            ],
+            sub_rows(row(3), row(1)),
             // Near plane
-            [
-                m[3] + m[2],
-                m[7] + m[6],
-                m[11] + m[10],
-                m[15] + m[14],
-            ],
+            add_rows(row(3), row(2)),
             // Far plane
-            [
-                m[3] - m[2],
-                m[7] - m[6],
-                m[11] - m[10],
-                m[15] - m[14],
-            ],
+            sub_rows(row(3), row(2)),
         ]
     }
     
@@ -255,23 +242,23 @@ impl SceneRenderer {
         
         // Пока простая реализация - сортировка по материалу
         self.command_buffer.sort_by(|a, b| {
-            let mat_a = match (a, b) {
-                (RenderCommand::Mesh { material: ma, .. }, _) => Some(*ma),
-                (RenderCommand::TerrainChunk { material: ma, .. }, _) => Some(*ma),
-                _ => None,
-            };
-            let mat_b = match b {
-                RenderCommand::Mesh { material: mb, .. } => Some(*mb),
-                RenderCommand::TerrainChunk { material: mb, .. } => Some(*mb),
-                _ => None,
-            };
-            
-            mat_a.cmp(&mat_b)
+            let mat_a = match a {
+            RenderCommand::Mesh { material: ma, .. } => ma.0,
+            RenderCommand::TerrainChunk { material: ma, .. } => ma.0,
+            _ => u64::MAX,
+        };
+        let mat_b = match b {
+            RenderCommand::Mesh { material: mb, .. } => mb.0,
+            RenderCommand::TerrainChunk { material: mb, .. } => mb.0,
+            _ => u64::MAX,
+        };
+        
+        mat_a.cmp(&mat_b)
         });
     }
     
     /// Рендерит сцену через command list
-    pub fn render(&mut self, camera: &Camera, commands: &[RenderCommand], cmd_list: &mut dyn ICommandList) -> Result<(), String> {
+    pub fn render(&mut self, camera: &Camera, commands: &[RenderCommand], cmd_list: &CommandListGuard) -> Result<(), String> {
         // Обновляем камеру
         self.update_camera(camera);
         
@@ -331,6 +318,10 @@ impl SceneRenderer {
                 RenderCommand::LineList { vertices, colors } => {
                     render_commands.push(command.clone());
                 }
+                RenderCommand::MeshDeform { .. } => {
+                    // Деформации меша обрабатываются на этапе подготовки данных
+                    render_commands.push(command.clone());
+                }
             }
         }
         
@@ -371,6 +362,9 @@ impl SceneRenderer {
                     // TODO: отрисовка линий (можно использовать DebugRenderer)
                     tracing::debug!("Rendering {} line vertices", vertices.len());
                     self.stats.draw_calls += 1;
+                }
+                RenderCommand::MeshDeform { mesh, deformations } => {
+                    tracing::debug!("Deforming mesh {:?} with {} deformations", mesh, deformations.len());
                 }
             }
         }

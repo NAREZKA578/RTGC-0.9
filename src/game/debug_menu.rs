@@ -3,7 +3,6 @@
 
 use crate::game::{Player, PlayerState};
 use crate::physics::PhysicsStats;
-use nalgebra::Vector3;
 
 /// Debug menu state
 #[derive(Clone)]
@@ -191,8 +190,6 @@ impl DebugMenu {
         );
         y += line_height;
     }
-
-    /// Render player info overlay
     pub fn render_player_info(
         &self,
         player: &Player,
@@ -226,7 +223,6 @@ impl DebugMenu {
             } => &format!("In Vehicle ({}:{})", vehicle_index, seat_index),
             PlayerState::InHelicopter { .. } => "In Helicopter",
             PlayerState::InCrane => "In Crane",
-            _ => "Unknown",
         };
         draw_text(&format!("State: {}", state_str), x, y, white);
         y += line_height;

@@ -8,6 +8,10 @@ use crate::graphics::rhi::device::*;
 use crate::graphics::rhi::types::*;
 use crate::graphics::rhi::RhiResult;
 
+// Stub constant for missing Windows API
+#[allow(dead_code)]
+const D3D11_SRV_DIMENSION_TEXTURE2D: u32 = 2;
+
 #[cfg(target_os = "windows")]
 use windows::{
     Win32::Graphics::Direct3D11::{
@@ -19,7 +23,7 @@ use windows::{
         D3D11_RESOURCE_MISC_GENERATE_MIPS,
         ID3D11Texture2D, ID3D11ShaderResourceView, ID3D11RenderTargetView,
         ID3D11DepthStencilView, ID3D11SamplerState,
-        D3D11_SRV_DIMENSION_TEXTURE2D, D3D11_RTV_DIMENSION_TEXTURE2D,
+        D3D11_RTV_DIMENSION_TEXTURE2D,
         D3D11_DSV_DIMENSION_TEXTURE2D,
         D3D11_FILTER_MIN_MAG_MIP_LINEAR, D3D11_TEXTURE_ADDRESS_WRAP,
         D3D11_COMPARISON_NEVER, D3D11_FILTER_MIN_MAG_MIP_POINT,
@@ -28,6 +32,7 @@ use windows::{
         D3D11_FILTER_MIN_LINEAR_MAG_POINT_MIP_LINEAR, D3D11_FILTER_ANISOTROPIC,
         D3D11_TEXTURE_ADDRESS_CLAMP, D3D11_TEXTURE_ADDRESS_MIRROR,
         D3D11_TEXTURE_ADDRESS_BORDER, D3D11_TEXTURE_ADDRESS_MIRROR_ONCE,
+        D3D11_CPU_ACCESS_READ, D3D11_CPU_ACCESS_WRITE,
     },
     Win32::Graphics::Dxgi::Common::{
         DXGI_FORMAT_UNKNOWN, DXGI_FORMAT_R8G8B8A8_UNORM,
@@ -141,19 +146,19 @@ impl Dx11Texture {
         // Determine bind flags
         let mut bind_flags = 0u32;
         if desc.usage.contains(TextureUsage::SHADER_READ) {
-            bind_flags |= D3D11_BIND_SHADER_RESOURCE.0;
+            bind_flags |= D3D11_BIND_SHADER_RESOURCE.0 as u32;
         }
         if desc.usage.contains(TextureUsage::RENDER_TARGET) {
-            bind_flags |= D3D11_BIND_RENDER_TARGET.0;
+            bind_flags |= D3D11_BIND_RENDER_TARGET.0 as u32;
         }
         if desc.usage.contains(TextureUsage::DEPTH_STENCIL) {
-            bind_flags |= D3D11_BIND_DEPTH_STENCIL.0;
+            bind_flags |= D3D11_BIND_DEPTH_STENCIL.0 as u32;
         }
         
         // Determine misc flags
         let mut misc_flags = 0u32;
         if desc.mip_levels > 1 && desc.usage.contains(TextureUsage::SHADER_READ) {
-            misc_flags |= D3D11_RESOURCE_MISC_GENERATE_MIPS.0;
+            misc_flags |= D3D11_RESOURCE_MISC_GENERATE_MIPS.0 as u32;
         }
         
         let dxgi_format = if desc.format.is_depth_format() {
@@ -179,7 +184,7 @@ impl Dx11Texture {
         };
         
         info!(target: "dx11.texture", "Texture desc: {}x{}, MipLevels={}, Format={:?}, BindFlags=0x{:x}",
-              texture_desc.Width, texture_desc.Height, texture_desc.MipLevels, texture_desc.Format, texture_desc.BindFlags);
+              texture_desc.Width, texture_desc.Height, texture_desc.MipLevels, texture_desc.Format, texture_desc.BindFlags.0);
         
         // Create texture
         let texture = unsafe {

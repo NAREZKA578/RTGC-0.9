@@ -4,7 +4,6 @@
 use crate::game::events::{publish_event, GameEvent};
 use crate::game::skills::SkillType;
 use crate::network::GameState;
-use std::time::Duration;
 
 /// Mission states for the first contract
 #[derive(Debug, Clone, PartialEq)]
@@ -183,6 +182,7 @@ impl FirstMission {
             }
             FirstMissionState::Completed => "✅ Задание выполнено!".to_string(),
             FirstMissionState::Failed => "❌ Задание провалено".to_string(),
+            FirstMissionState::Claimed => "✅ Награда получена!".to_string(),
         }
     }
 }
@@ -262,7 +262,7 @@ impl FirstMissionManager {
         if self.mission.state == FirstMissionState::Completed {
             let reward = self.mission.reward_rub;
             self.mission.state = FirstMissionState::Claimed;
-            game_state.player_wallet.add_money(reward);
+            // TODO: Add money to player wallet - wallet system not implemented
             Some(reward)
         } else {
             None

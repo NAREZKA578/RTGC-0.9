@@ -39,13 +39,16 @@ pub trait IDevice: Send + Sync {
     /// Create a Pipeline State Object (PSO)
     fn create_pipeline_state(&self, desc: &PipelineStateObject) -> RhiResult<ResourceHandle>;
     
+    /// Create an input layout for vertex shaders
+    fn create_input_layout(&self, desc: &InputLayout) -> RhiResult<ResourceHandle>;
+    
     /// Create a descriptor heap/set for binding resources
     fn create_descriptor_heap(&self, desc: &DescriptorHeapDescription) -> RhiResult<ResourceHandle>;
     
     // ==================== Command List Creation ====================
     
     /// Create a command list for recording GPU commands
-    fn create_command_list(&self, cmd_type: CommandListType) -> RhiResult<Arc<dyn ICommandList>>;
+    fn create_command_list(&self, cmd_type: CommandListType) -> RhiResult<Box<dyn ICommandList + Send + Sync>>;
     
     /// Create a command queue for submitting command lists
     fn create_command_queue(&self, cmd_type: CommandListType) -> RhiResult<Arc<dyn ICommandQueue>>;
@@ -80,6 +83,19 @@ pub trait IDevice: Send + Sync {
         data: &[u8],
     ) -> RhiResult<()>;
     
+    /// Update texture subresource data
+    fn update_texture(
+        &self,
+        texture: ResourceHandle,
+        offset_x: u32,
+        offset_y: u32,
+        offset_z: u32,
+        width: u32,
+        height: u32,
+        depth: u32,
+        data: &[u8],
+    ) -> RhiResult<()>;
+    
     /// Map a buffer for CPU write access (returns pointer)
     fn map_buffer(&self, buffer: ResourceHandle) -> RhiResult<*mut u8>;
     
@@ -101,6 +117,9 @@ pub trait IDevice: Send + Sync {
 
 /// Command List - records GPU commands for submission
 pub trait ICommandList: Send + Sync {
+    /// Get a reference to self as Any (for downcasting)
+    fn as_any(&self) -> &dyn std::any::Any;
+    
     /// Reset the command list for re-recording
     fn reset(&mut self) -> RhiResult<()>;
     
@@ -144,20 +163,10 @@ pub trait ICommandList: Send + Sync {
     fn bind_index_buffer(&mut self, buffer: ResourceHandle, offset: u64, index_format: IndexFormat);
     
     /// Bind constant buffer to a shader stage
-    fn bind_constant_buffer(
-        &mut self,
-        stage: ShaderStage,
-        slot: u32,
-        buffer: ResourceHandle,
-    );
+    fn bind_constant_buffer(&mut self, stage: ShaderStage, slot: u32, buffer: ResourceHandle);
     
     /// Bind shader resource view
-    fn bind_shader_resource(
-        &mut self,
-        stage: ShaderStage,
-        slot: u32,
-        view: ResourceHandle,
-    );
+    fn bind_shader_resource(&mut self, stage: ShaderStage, slot: u32, view: ResourceHandle);
     
     /// Bind sampler
     fn bind_sampler(&mut self, stage: ShaderStage, slot: u32, sampler: ResourceHandle);
@@ -168,14 +177,7 @@ pub trait ICommandList: Send + Sync {
     fn draw(&mut self, vertex_count: u32, instance_count: u32, start_vertex: u32, start_instance: u32);
     
     /// Draw indexed vertices
-    fn draw_indexed(
-        &mut self,
-        index_count: u32,
-        instance_count: u32,
-        start_index: u32,
-        base_vertex: i32,
-        start_instance: u32,
-    );
+    fn draw_indexed(&mut self, index_count: u32, instance_count: u32, start_index: u32, base_vertex: i32, start_instance: u32);
     
     /// Indirect draw
     fn draw_indirect(&mut self, buffer: ResourceHandle, offset: u64, draw_count: u32);
@@ -202,12 +204,7 @@ pub trait ICommandList: Send + Sync {
     fn clear_render_target(&mut self, view: ResourceHandle, color: [f32; 4]);
     
     /// Clear depth/stencil
-    fn clear_depth_stencil(
-        &mut self,
-        view: ResourceHandle,
-        clear_depth: Option<f32>,
-        clear_stencil: Option<u8>,
-    );
+    fn clear_depth_stencil(&mut self, view: ResourceHandle, clear_depth: Option<f32>, clear_stencil: Option<u8>);
     
     // ==================== Debug ====================
     
@@ -221,93 +218,66 @@ pub trait ICommandList: Send + Sync {
     fn end_debug_group(&mut self);
 }
 
-/// Command Queue - submits command lists to GPU
+use parking_lot::Mutex;
+
+// CommandListGuard - Arc<Mutex<Box<dyn ICommandList>>> to allow mutable access to trait object
+pub type CommandListGuard = Arc<Mutex<Box<dyn ICommandList>>>;
+
+// Helper to create a CommandListGuard from a Box<dyn ICommandList>
+pub fn make_command_list_guard(cmd: Box<dyn ICommandList>) -> CommandListGuard {
+    Arc::new(Mutex::new(cmd))
+}
+
 pub trait ICommandQueue: Send + Sync {
-    /// Submit command lists for execution
     fn submit(&self, command_lists: &[&dyn ICommandList], wait_semaphores: &[Arc<dyn ISemaphore>], signal_semaphores: &[Arc<dyn ISemaphore>]) -> RhiResult<()>;
-    
-    /// Present a swap chain image
     fn present(&self, swap_chain: &dyn ISwapChain) -> RhiResult<()>;
-    
-    /// Signal a fence after all submitted work completes
     fn signal(&self, fence: &dyn IFence, value: u64) -> RhiResult<()>;
-    
-    /// Wait for a fence to reach a value
     fn wait(&self, fence: &dyn IFence, value: u64, timeout_ms: u32) -> RhiResult<bool>;
 }
 
-/// Fence for CPU-GPU synchronization
 pub trait IFence: Send + Sync {
-    /// Get current fence value
     fn get_value(&self) -> u64;
-
-    /// Set fence value (called by command queue when signal is submitted)
     fn set_value(&self, value: u64);
-
-    /// Set event to be signaled when fence reaches value
     fn set_event_on_completion(&self, value: u64) -> RhiResult<Arc<dyn std::any::Any + Send + Sync>>;
 }
 
-/// Semaphore for GPU-GPU synchronization
 pub trait ISemaphore: Send + Sync {}
 
-/// Swap chain for presenting to window
 pub trait ISwapChain: Send + Sync + std::any::Any {
-    /// Get the current back buffer index
-    fn get_current_back_buffer_index(&self) -> u32;
-    
-    /// Get the back buffer texture
+    fn as_any(&self) -> &dyn std::any::Any;
+    fn get_current_back_buffer_index(&self) -> usize;
     fn get_back_buffer(&self) -> ResourceHandle;
-    
-    /// Get the actual back buffer texture handle for creating texture views
-    fn get_back_buffer_texture(&self) -> ResourceHandle {
-        self.get_back_buffer()
-    }
-    
-    /// Resize the swap chain
-    fn resize(&mut self, width: u32, height: u32) -> RhiResult<()>;
-    
-    /// Present the current frame
+    fn get_back_buffer_texture(&self) -> ResourceHandle;
+    fn width(&self) -> u32;
+    fn height(&self) -> u32;
     fn present(&self) -> RhiResult<()>;
+    fn present_with_sync(&self, semaphore: Option<&dyn ISemaphore>) -> RhiResult<()>;
+    fn resize(&self, width: u32, height: u32) -> RhiResult<()>;
 }
 
-// Helper method for downcasting
-impl dyn ISwapChain {
-    pub fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-}
-
-/// Texture view description
-#[derive(Debug, Clone)]
 pub struct TextureViewDescription {
     pub view_type: TextureViewType,
     pub format: TextureFormat,
-    pub most_detailed_mip: u32,
+    pub aspect_mask: u32,
+    pub base_mip_level: u32,
     pub mip_level_count: u32,
-    pub first_array_slice: u32,
-    pub array_slice_count: u32,
+    pub base_array_layer: u32,
+    pub array_layer_count: u32,
 }
 
-/// Texture view type
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TextureViewType {
-    ShaderResource,
-    RenderTarget,
-    DepthStencil,
-    UnorderedAccess,
+    SRV,
+    RTV,
+    DSV,
+    UAV,
 }
 
-/// Descriptor heap description
-#[derive(Debug, Clone)]
 pub struct DescriptorHeapDescription {
     pub heap_type: DescriptorHeapType,
-    pub capacity: u32,
+    pub descriptor_count: u32,
     pub flags: DescriptorHeapFlags,
 }
 
-/// Descriptor heap type
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DescriptorHeapType {
     ConstantBufferView,
     ShaderResourceView,

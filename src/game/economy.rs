@@ -541,10 +541,10 @@ impl EconomySystem {
     pub fn update(&mut self, delta_hours: f32, current_game_day: u32) {
         // Process buy order deadlines in shops
         for shop in self.shops.values_mut() {
-            shop.buy_orders.retain(|order| {
+            shop.buy_orders.retain(|_key, order| {
                 if order.deadline_hours <= 0.0 {
                     // Order expired - remove it
-                    tracing::debug!("Buy order for {} expired", order.resource_type);
+                    tracing::debug!("Buy order for {} expired", order.resource);
                     false
                 } else {
                     order.deadline_hours -= delta_hours;
@@ -552,7 +552,7 @@ impl EconomySystem {
                 }
             });
         }
-
+  
         // Process contract job deadlines - decrement only when day changes
         let days_passed = if current_game_day > self.last_processed_day {
             current_game_day - self.last_processed_day
@@ -561,7 +561,7 @@ impl EconomySystem {
         };
         
         if days_passed > 0 {
-            self.job_board.available_jobs.retain(|job| {
+            self.job_board.jobs.retain(|job| {
                 if job.deadline_game_days == 0 {
                     // Job already expired
                     tracing::debug!("Contract job '{}' expired", job.title);
@@ -579,20 +579,20 @@ impl EconomySystem {
             });
             
             // Decrement deadlines for remaining jobs
-            for job in self.job_board.available_jobs.iter_mut() {
+            for job in &mut self.job_board.jobs {
                 if job.deadline_game_days > 0 {
                     job.deadline_game_days = job.deadline_game_days.saturating_sub(days_passed);
                 }
             }
-            
-            self.last_processed_day = current_game_day;
         }
+        
+        self.last_processed_day = current_game_day;
 
         // Update market prices based on supply/demand fluctuations
         for price in self.market_prices.values_mut() {
-            // Small random fluctuation (±2% per hour)
-            let fluctuation = (delta_hours * 0.02).min(0.1);
-            price.supply_level = (price.supply_level + (fluctuation * 0.1)).max(0.5).min(2.0);
+             // Small random fluctuation (±2% per hour)
+             let fluctuation = (delta_hours as f64 * 0.02).min(0.1);
+             price.supply_modifier = (price.supply_modifier + (fluctuation * 0.1)).max(0.5).min(2.0);
         }
     }
 }

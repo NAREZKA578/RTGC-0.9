@@ -16,6 +16,9 @@ pub mod network;
 pub mod utils;
 pub mod weather;
 
+// Re-export Config for convenience
+pub use config::Config;
+
 // Core engine types re-export
 pub use nalgebra;
 pub use winit;

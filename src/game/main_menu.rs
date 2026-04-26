@@ -114,7 +114,7 @@ impl MainMenu {
         self.buttons.push(MenuButton {
             id: 2,
             text: "Настройки".to_string(),
-            position: [start_x, start_y + spacing * 2],
+            position: [start_x, start_y + spacing * 2.0],
             size: [button_width, button_height],
             action: ButtonAction::Settings,
             is_hovered: false,
@@ -124,7 +124,7 @@ impl MainMenu {
         self.buttons.push(MenuButton {
             id: 3,
             text: "Выход".to_string(),
-            position: [start_x, start_y + spacing * 3],
+            position: [start_x, start_y + spacing * 3.0],
             size: [button_width, button_height],
             action: ButtonAction::Quit,
             is_hovered: false,
@@ -154,32 +154,43 @@ impl MainMenu {
     
     /// Обновить состояние меню (обработка ввода, анимации)
     pub fn update(&mut self, dt: f32, input: &InputManager) -> Option<MenuAction> {
-        // Обновляем позицию мыши из состояния InputManager
+        use crate::input::input_module::MouseButton;
         let state = input.state();
-        self.mouse_position = [state.mouse_position.0 as f32, state.mouse_position.1 as f32];
+        let mouse_pos = state.mouse_position();
+        self.mouse_position = [mouse_pos.0 as f32, mouse_pos.1 as f32];
         
-        // Проверяем hover на кнопках
-        for button in &mut self.buttons {
-            button.is_hovered = self.is_point_in_rect(
-                self.mouse_position,
-                button.position,
-                button.size,
-            );
+        // Сначала собираем данные о кнопках (индексы и действия)
+        let button_actions: Vec<_> = self.buttons.iter().enumerate().map(|(i, b)| {
+            let hovered = self.is_point_in_rect(self.mouse_position, b.position, b.size);
+            let action = if hovered && state.is_mouse_button_just_pressed(MouseButton::Left) {
+                Some((i, b.action.clone()))
+            } else {
+                None
+            };
+            (hovered, action)
+        }).collect();
+        
+        // Теперь обновляем состояние кнопок
+        let mut action_to_perform: Option<MenuAction> = None;
+        for (i, button) in self.buttons.iter_mut().enumerate() {
+            let (hovered, click_action) = &button_actions[i];
+            button.is_hovered = *hovered;
             
-            // Проверка нажатия (используем левую кнопку мыши - MouseButton::Left)
-            use crate::input::input_module::MouseButton;
-            if button.is_hovered && state.is_mouse_button_pressed(MouseButton::Left) {
+            if click_action.is_some() {
                 button.is_pressed = true;
             } else if button.is_pressed && !state.is_mouse_button_down(MouseButton::Left) {
-                // Кнопка отпущена - выполняем действие
                 button.is_pressed = false;
-                if button.is_hovered {
-                    return Some(self.handle_button_action(&button.action));
-                }
+            }
+        }
+        // Проверяем действия после изменения состояния кнопок
+        for button in &self.buttons {
+            if button.is_pressed && button.is_hovered {
+                action_to_perform = Some(self.handle_button_action(&button.action.clone()));
+                break;
             }
         }
         
-        None
+        action_to_perform
     }
     
     /// Отрисовка меню

@@ -1,5 +1,5 @@
 use crate::graphics::rhi::{IDevice, BufferDesc, BufferType, BufferUsage, ResourceHandle, RhiError};
-use crate::world::chunk::{TerrainVertex, CHUNK_SIZE, HEIGHTMAP_RESOLUTION};
+use crate::world::chunk::TerrainVertex;
 use bytemuck;
 
 /// Простая вершина для тестового рендеринга
@@ -9,6 +9,8 @@ pub struct SimpleVertex {
     pub pos: [f32; 3],
     pub color: [f32; 3],
 }
+
+unsafe impl bytemuck::NoUninit for SimpleVertex {}
 
 /// Меш с вершинным и опционально индексным буфером
 pub struct Mesh {
@@ -53,6 +55,8 @@ impl Mesh {
             pos: [f32; 3],
             uv: [f32; 2],
         }
+
+        unsafe impl bytemuck::NoUninit for TexturedVertex {}
 
         let vertices = [
             TexturedVertex { pos: [-0.5, -0.5, 0.0], uv: [0.0, 1.0] },
@@ -133,6 +137,8 @@ impl Mesh {
         struct SkyboxVertex {
             pos: [f32; 3],
         }
+
+        unsafe impl bytemuck::NoUninit for SkyboxVertex {}
 
         let vertices = [
             SkyboxVertex { pos: [-1.0, -1.0, 1.0] },

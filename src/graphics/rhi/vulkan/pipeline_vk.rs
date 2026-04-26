@@ -3,7 +3,6 @@
 
 use crate::graphics::rhi::types::*;
 use ash::vk;
-use std::sync::Arc;
 
 /// Vulkan Pipeline State Object
 pub struct VkPipelineState {
@@ -11,7 +10,6 @@ pub struct VkPipelineState {
     pipeline_layout: vk::PipelineLayout,
     handle: ResourceHandle,
     description: PipelineStateObject,
-    device: Arc<vk::DeviceFnV1_5>,
 }
 
 unsafe impl Send for VkPipelineState {}
@@ -25,8 +23,6 @@ impl VkPipelineState {
         render_pass: vk::RenderPass,
         handle: ResourceHandle,
     ) -> RhiResult<Self> {
-        let device_fn = device.fp_v1_5();
-        
         // Convert input layout to Vulkan
         let input_elements = Self::build_input_layout(&desc.input_layout);
         
@@ -121,7 +117,6 @@ impl VkPipelineState {
             pipeline_layout,
             handle,
             description: desc.clone(),
-            device: Arc::new(*device_fn),
         })
     }
     
@@ -205,7 +200,7 @@ impl VkPipelineState {
         }
     }
     
-    fn build_depth_stencil_state(depth: &DepthState, stencil: &StencilState) -> vk::PipelineDepthStencilStateCreateInfo {
+    fn build_depth_stencil_state(depth: &DepthState, stencil: &StencilState) -> vk::PipelineDepthStencilStateCreateInfo<'static> {
         vk::PipelineDepthStencilStateCreateInfo::default()
             .depth_test_enable(if depth.enabled { vk::TRUE } else { vk::FALSE })
             .depth_write_enable(if depth.write_enabled { vk::TRUE } else { vk::FALSE })
@@ -283,7 +278,7 @@ impl VkPipelineState {
         }
     }
     
-    fn build_shader_stages(device: &ash::Device, desc: &PipelineStateObject) -> Vec<vk::PipelineShaderStageCreateInfo> {
+    fn build_shader_stages(device: &ash::Device, desc: &PipelineStateObject) -> Vec<vk::PipelineShaderStageCreateInfo<'static>> {
         let mut stages = Vec::new();
         
         // Vertex shader
@@ -305,13 +300,10 @@ impl VkPipelineState {
         device: &ash::Device,
         shader_handle: &ResourceHandle,
         stage: vk::ShaderStageFlags,
-    ) -> Option<vk::PipelineShaderStageCreateInfo> {
+    ) -> Option<vk::PipelineShaderStageCreateInfo<'static>> {
         // Получаем SPIR-V байткод из ResourceManager
         // В реальном использовании здесь должен быть доступ к ResourceManager
         // Для демонстрации создаем заглушку с правильными полями
-        
-        use crate::graphics::rhi::resource_manager::ResourceManager;
-        use std::sync::{Arc, Mutex};
         
         // Note: В production коде здесь нужно получить ResourceManager из контекста устройства
         // и извлечь spirv_bytecode по shader_handle

@@ -1,46 +1,23 @@
-// RTGC-0.8 Main Entry Point - Simple engine runner
+// RTGC-0.9 Main Entry Point
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use rtgc::engine::{Engine, EngineConfig};
-use tracing::{error, info};
+fn main() {
+    // Initialize logging
+    rtgc::utils::logger::init_logger();
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
     eprintln!("========================================");
     eprintln!("RTGC Starting... v0.8.0");
     eprintln!("========================================");
 
-    // Set up panic hook for debugging crashes
-    std::panic::set_hook(Box::new(|panic_info| {
-        eprintln!("===========================================");
-        eprintln!("PANIC: {}", panic_info);
-        if let Some(location) = panic_info.location() {
-            eprintln!(
-                "  at {}:{}:{}",
-                location.file(),
-                location.line(),
-                location.column()
-            );
-        }
-        eprintln!("===========================================");
-        eprintln!("Press Enter to exit...");
-        let mut input = String::new();
-        std::io::stdin().read_line(&mut input).ok();
-    }));
-
-    // Запуск движка через центральный модуль core
-    let config = EngineConfig::default();
-    match Engine::run(config) {
-        Ok(()) => {
-            info!("Engine shutdown successfully");
-            Ok(())
+    // Create and run the engine
+    match rtgc::engine::core::Engine::new() {
+        Ok(mut engine) => {
+            if let Err(e) = engine.run() {
+                eprintln!("Engine error: {}", e);
+            }
         }
         Err(e) => {
-            error!("Engine failed with error: {}", e);
-            eprintln!("Fatal error: {}", e);
-            eprintln!("Press Enter to exit...");
-            let mut input = String::new();
-            std::io::stdin().read_line(&mut input).ok();
-            Err(e)
+            eprintln!("Failed to create engine: {}", e);
         }
     }
 }

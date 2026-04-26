@@ -10,6 +10,8 @@ pub mod events;
 pub mod first_mission;
 pub mod interaction;
 pub mod inventory;
+pub mod loading_manager;
+pub mod asset_manager;
 pub mod main_menu;
 pub mod map_system;
 pub mod mission_generator;
@@ -23,6 +25,7 @@ pub mod skills;
 pub mod storage;
 pub mod ui;
 pub mod vehicle_parts;
+pub mod weather;
 pub mod winch;
 
 pub use crate::network::protocol::PlayerInput;
@@ -33,10 +36,7 @@ pub use base_builder::{
     MIN_BASE_DISTANCE,
 };
 pub use cargo::Cargo;
-pub use character_creation::{
-    CharacterCreationData, CharacterCreationManager, CreationStep, EducationOption, Gender,
-    StartLocation, HAIR_COLORS, SKIN_TONES, START_LOCATIONS, UAZ_COLORS,
-};
+pub use character_creation::CharacterCreation;
 pub use debug_menu::DebugMenu;
 pub use economy::{
     calculate_wage, get_base_salary, BuyOrder, ContractJob, EconomySystem, JobBoard, MarketPrice,
@@ -80,4 +80,5 @@ pub use vehicle_parts::{
     PartCategory, PartDiagnostic, VehiclePart, VehiclePartsSystem, MAX_INTEGRITY,
     MIN_FUNCTIONAL_INTEGRITY,
 };
+pub use weather::WeatherState;
 pub use winch::Winch;

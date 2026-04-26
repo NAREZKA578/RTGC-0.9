@@ -10,7 +10,7 @@
 use nalgebra::{Vector3, Point3};
 use std::collections::HashMap;
 use std::sync::Arc;
-use tracing::{info, warn, debug};
+use tracing::{info, debug};
 
 pub use super::chunk::{Chunk, ChunkId, ChunkData, CHUNK_SIZE};
 pub use super::chunk_manager::{ChunkManager, ChunkCoords};

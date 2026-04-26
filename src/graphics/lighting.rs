@@ -1,7 +1,7 @@
 //! Lighting System for RTGC-0.8
 //! PBR освещение, Directional/Point/Spot lights, ACES Tone Mapping
 
-use nalgebra::{Vector3, Matrix3};
+use nalgebra::Vector3;
 
 /// Типы источников света
 #[derive(Debug, Clone, Copy, PartialEq)]

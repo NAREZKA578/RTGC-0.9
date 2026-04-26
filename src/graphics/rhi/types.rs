@@ -2,9 +2,12 @@
 // Provides unified interface for Vulkan, DirectX 12, and OpenGL backends
 // Designed for multi-threaded command recording and PSO-based rendering
 
-use std::sync::Arc;
 use std::fmt;
 use std::any::Any;
+use std::hash::{Hash, Hasher};
+use std::collections::hash_map::DefaultHasher;
+
+pub use super::device::*;
 
 /// Resource handle for GPU resources
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -12,14 +15,21 @@ pub struct ResourceHandle(pub u64);
 
 impl ResourceHandle {
     pub const INVALID: Self = ResourceHandle(u64::MAX);
+    pub const DEFAULT: Self = ResourceHandle(0);
     
     pub fn is_valid(&self) -> bool {
         self.0 != u64::MAX
     }
 }
 
+impl Default for ResourceHandle {
+    fn default() -> Self {
+        Self::DEFAULT
+    }
+}
+
 /// Vertex attribute format
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum VertexFormat {
     Float32x2,
     Float32x3,
@@ -49,12 +59,14 @@ impl VertexFormat {
 }
 
 /// Vertex attribute description
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash)]
 pub struct VertexAttribute {
     pub name: String,
     pub format: VertexFormat,
     pub offset: u32,
     pub location: u32,
+    pub semantic: String,
+    pub buffer_slot: u32,
 }
 
 /// Input layout for vertex shader
@@ -64,479 +76,36 @@ pub struct InputLayout {
     pub stride: u32,
 }
 
+impl Default for InputLayout {
+    fn default() -> Self {
+        Self {
+            attributes: Vec::new(),
+            stride: 0,
+        }
+    }
+}
+
 impl InputLayout {
     pub fn new(attributes: Vec<VertexAttribute>) -> Self {
         let stride = attributes.iter().map(|a| a.format.size_bytes() as u32).sum();
         Self { attributes, stride }
     }
-}
-
-/// Shader stage type
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ShaderStage {
-    Vertex,
-    Fragment,
-    Compute,
-    Geometry,
-    TessellationControl,
-    TessellationEvaluation,
-}
-
-/// Shader description
-#[derive(Debug, Clone)]
-pub struct ShaderDescription {
-    pub stage: ShaderStage,
-    pub source: Vec<u8>, // SPIR-V bytecode or HLSL source
-    pub entry_point: String,
-}
-
-impl ShaderDescription {
-    /// Alias for source field for backwards compatibility
-    pub fn bytecode(&self) -> &[u8] {
-        &self.source
+    
+    pub fn len(&self) -> usize {
+        self.attributes.len()
     }
-}
-
-/// Blend mode for color blending
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum BlendMode {
-    Zero,
-    One,
-    SrcColor,
-    OneMinusSrcColor,
-    DstColor,
-    OneMinusDstColor,
-    SrcAlpha,
-    OneMinusSrcAlpha,
-    DstAlpha,
-    OneMinusDstAlpha,
-}
-
-/// Blend operation
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum BlendOp {
-    Add,
-    Subtract,
-    ReverseSubtract,
-    Min,
-    Max,
-}
-
-/// Color blend state for render target
-#[derive(Debug, Clone)]
-pub struct ColorBlendState {
-    pub enabled: bool,
-    pub src_color_blend: BlendMode,
-    pub dst_color_blend: BlendMode,
-    pub color_blend_op: BlendOp,
-    pub src_alpha_blend: BlendMode,
-    pub dst_alpha_blend: BlendMode,
-    pub alpha_blend_op: BlendOp,
-    pub write_mask: u8, // RGBA bitmask
-}
-
-impl Default for ColorBlendState {
-    fn default() -> Self {
-        Self {
-            enabled: false,
-            src_color_blend: BlendMode::One,
-            dst_color_blend: BlendMode::Zero,
-            color_blend_op: BlendOp::Add,
-            src_alpha_blend: BlendMode::One,
-            dst_alpha_blend: BlendMode::Zero,
-            alpha_blend_op: BlendOp::Add,
-            write_mask: 0xF, // Enable all channels
-        }
+    
+    pub fn is_empty(&self) -> bool {
+        self.attributes.is_empty()
     }
-}
-
-/// Depth/stencil test function
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum CompareFunc {
-    Never,
-    Less,
-    Equal,
-    LessEqual,
-    Greater,
-    NotEqual,
-    GreaterEqual,
-    #[default]
-    Always,
-}
-
-/// Depth state
-#[derive(Debug, Clone)]
-pub struct DepthState {
-    pub enabled: bool,
-    pub write_enabled: bool,
-    pub compare_func: CompareFunc,
-}
-
-impl Default for DepthState {
-    fn default() -> Self {
-        Self {
-            enabled: true,
-            write_enabled: true,
-            compare_func: CompareFunc::Less,
-        }
-    }
-}
-
-/// Stencil operation
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum StencilOp {
-    #[default]
-    Keep,
-    Zero,
-    Replace,
-    IncrementClamp,
-    DecrementClamp,
-    Invert,
-    IncrementWrap,
-    DecrementWrap,
-}
-
-/// Stencil face state
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
-pub struct StencilFaceState {
-    pub fail_op: StencilOp,
-    pub depth_fail_op: StencilOp,
-    pub pass_op: StencilOp,
-    pub compare_func: CompareFunc,
-}
-
-/// Stencil state
-#[derive(Debug, Clone)]
-pub struct StencilState {
-    pub enabled: bool,
-    pub front_face: StencilFaceState,
-    pub back_face: StencilFaceState,
-    pub read_mask: u8,
-    pub write_mask: u8,
-    pub reference: u8,
-}
-
-impl Default for StencilState {
-    fn default() -> Self {
-        Self {
-            enabled: false,
-            front_face: StencilFaceState {
-                fail_op: StencilOp::Keep,
-                depth_fail_op: StencilOp::Keep,
-                pass_op: StencilOp::Keep,
-                compare_func: CompareFunc::Always,
-            },
-            back_face: StencilFaceState {
-                fail_op: StencilOp::Keep,
-                depth_fail_op: StencilOp::Keep,
-                pass_op: StencilOp::Keep,
-                compare_func: CompareFunc::Always,
-            },
-            read_mask: 0xFF,
-            write_mask: 0xFF,
-            reference: 0,
-        }
-    }
-}
-
-/// Cull mode for face culling
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CullMode {
-    None,
-    Front,
-    Back,
-}
-
-/// Front face winding order
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum FrontFace {
-    CounterClockwise,
-    Clockwise,
-}
-
-/// Rasterizer state
-#[derive(Debug, Clone)]
-pub struct RasterizerState {
-    pub cull_mode: CullMode,
-    pub front_face: FrontFace,
-    pub fill_mode: FillMode,
-    pub polygon_offset_factor: f32,
-    pub polygon_offset_units: f32,
-}
-
-impl Default for RasterizerState {
-    fn default() -> Self {
-        Self {
-            cull_mode: CullMode::Back,
-            front_face: FrontFace::CounterClockwise,
-            fill_mode: FillMode::Solid,
-            polygon_offset_factor: 0.0,
-            polygon_offset_units: 0.0,
-        }
-    }
-}
-
-/// Fill mode for polygons
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum FillMode {
-    Solid,
-    Wireframe,
-    Point,
-}
-
-/// Pipeline State Object (PSO) - immutable render state
-#[derive(Debug, Clone)]
-pub struct PipelineStateObject {
-    pub vertex_shader: ResourceHandle,
-    pub fragment_shader: Option<ResourceHandle>,
-    pub compute_shader: Option<ResourceHandle>,
-    pub input_layout: InputLayout,
-    pub color_blend_states: Vec<ColorBlendState>, // One per render target
-    pub depth_state: DepthState,
-    pub stencil_state: StencilState,
-    pub rasterizer_state: RasterizerState,
-    pub primitive_topology: PrimitiveTopology,
-    pub sample_count: u32,
-}
-
-impl PipelineStateObject {
-    /// Get all shaders as a vector for backwards compatibility
-    pub fn shaders(&self) -> Vec<ResourceHandle> {
-        let mut shaders = Vec::new();
-        shaders.push(self.vertex_shader);
-        if let Some(fs) = self.fragment_shader {
-            shaders.push(fs);
-        }
-        if let Some(cs) = self.compute_shader {
-            shaders.push(cs);
-        }
-        shaders
-    }
-}
-
-impl Default for PipelineStateObject {
-    fn default() -> Self {
-        Self {
-            vertex_shader: ResourceHandle::INVALID,
-            fragment_shader: None,
-            compute_shader: None,
-            input_layout: InputLayout { attributes: vec![], stride: 0 },
-            color_blend_states: vec![ColorBlendState::default()],
-            depth_state: DepthState::default(),
-            stencil_state: StencilState::default(),
-            rasterizer_state: RasterizerState::default(),
-            primitive_topology: PrimitiveTopology::TriangleList,
-            sample_count: 1,
-        }
-    }
-}
-
-/// Primitive topology for drawing
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PrimitiveTopology {
-    PointList,
-    LineList,
-    LineStrip,
-    TriangleList,
-    TriangleStrip,
-}
-
-/// Texture dimension
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TextureDimension {
-    D1,
-    D2,
-    D3,
-    Cube,
-}
-
-/// Texture type
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TextureType {
-    Texture1D,
-    Texture2D,
-    Texture3D,
-    TextureCube,
-    Texture1DArray,
-    Texture2DArray,
-    TextureCubeArray,
-}
-
-/// Texture format
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TextureFormat {
-    R8Unorm,
-    R8G8Unorm,
-    R8G8B8Unorm,
-    R8G8B8A8Unorm,
-    R8G8B8A8Srgb,
-    R8Uint,
-    R16Float,
-    R16G16Float,
-    R16G16B16A16Float,
-    R32Float,
-    R32G32Float,
-    R32G32B32A32Float,
-    Rg8Unorm,
-    Rg16Float,
-    Rg32Float,
-    Rgba8Unorm,
-    Rgba8Uint,
-    Rgba8Snorm,
-    Rgba16Float,
-    Rgba32Float,
-    Bgra8Unorm,
-    D16Unorm,
-    D24UnormS8Uint,
-    D32Float,
-    D32FloatS8UintX24,
-    Depth16Unorm,
-    Depth24Plus,
-    Depth32Float,
-    Stencil8,
-    Depth24PlusStencil8,
-    Depth32FloatStencil8,
-    BC1RgbUnorm,
-    BC1RgbaUnorm,
-    BC2Unorm,
-    BC3Unorm,
-    BC3RgbaUnorm,
-    BC4Unorm,
-    BC5Unorm,
-    BC6HUfloat,
-    BC7Unorm,
-    BC7RgbaUnorm,
-    // Дополнительные форматы для совместимости с gl.rs
-    R8G8B8UnormSrgb,
-    R8G8B8A8UnormSrgb,
-    R16Uint,
-    R16Sint,
-    R16G16Uint,
-    R16G16Sint,
-    R16G16B16A16Uint,
-    R16G16B16A16Sint,
-    R32Uint,
-    R32Sint,
-    R32G32Uint,
-    R32G32Sint,
-    R32G32B32A32Uint,
-    R32G32B32A32Sint,
-    Rg8Uint,
-    Rg8Sint,
-    Rg16Uint,
-    Rg16Sint,
-    Rg32Uint,
-    Rg32Sint,
-    Rgba8Sint,
-    Rgba16Uint,
-    Rgba16Sint,
-    Rgba32Uint,
-    Rgba32Sint,
-    Bgra8UnormSrgb,
-    Bgr8Unorm,
-    Bgr8UnormSrgb,
-    Rgb10A2Unorm,
-    R11G11B10Float,
-    R9G9B9E5Float,
-    Depth16,
-    Depth24,
-    Depth32,
-    Depth24Stencil8,
-    Depth32Stencil8,
-    BC1RgbaUnormSrgb,
-    BC2UnormSrgb,
-    BC3UnormSrgb,
-    BC4Snorm,
-    BC5Snorm,
-    BC6HFloat,
-    BC7UnormSrgb,
-}
-
-impl TextureFormat {
-    pub fn is_depth_format(&self) -> bool {
-        matches!(
-            self,
-            TextureFormat::D16Unorm
-                | TextureFormat::D24UnormS8Uint
-                | TextureFormat::D32Float
-                | TextureFormat::D32FloatS8UintX24
-                | TextureFormat::Depth16Unorm
-                | TextureFormat::Depth24Plus
-                | TextureFormat::Depth32Float
-                | TextureFormat::Stencil8
-                | TextureFormat::Depth24PlusStencil8
-                | TextureFormat::Depth32FloatStencil8
-                | TextureFormat::Depth16
-                | TextureFormat::Depth24
-                | TextureFormat::Depth32
-                | TextureFormat::Depth24Stencil8
-                | TextureFormat::Depth32Stencil8
-        )
-    }
-
-    pub fn is_compressed(&self) -> bool {
-        matches!(
-            self,
-            TextureFormat::BC1RgbUnorm
-                | TextureFormat::BC1RgbaUnorm
-                | TextureFormat::BC1RgbaUnormSrgb
-                | TextureFormat::BC2Unorm
-                | TextureFormat::BC2UnormSrgb
-                | TextureFormat::BC3Unorm
-                | TextureFormat::BC3UnormSrgb
-                | TextureFormat::BC3RgbaUnorm
-                | TextureFormat::BC4Unorm
-                | TextureFormat::BC4Snorm
-                | TextureFormat::BC5Unorm
-                | TextureFormat::BC5Snorm
-                | TextureFormat::BC6HUfloat
-                | TextureFormat::BC6HFloat
-                | TextureFormat::BC7Unorm
-                | TextureFormat::BC7UnormSrgb
-                | TextureFormat::BC7RgbaUnorm
-        )
-    }
-}
-
-/// Texture description
-#[derive(Debug, Clone)]
-pub struct TextureDescription {
-    pub dimension: TextureDimension,
-    pub texture_type: TextureType,
-    pub width: u32,
-    pub height: u32,
-    pub depth: u32,
-    pub depth_or_array_layers: u32,
-    pub mip_levels: u32,
-    pub format: TextureFormat,
-    pub usage: TextureUsage,
-    pub initial_state: ResourceState,
-}
-
-impl TextureDescription {
-    /// Get depth value (alias for depth_or_array_layers)
-    pub fn depth(&self) -> u32 {
-        self.depth_or_array_layers
-    }
-}
-
-/// Texture usage flags
-bitflags::bitflags! {
-    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-    pub struct TextureUsage: u32 {
-        const SHADER_READ = 1 << 0;
-        const SHADER_WRITE = 1 << 1;
-        const RENDER_TARGET = 1 << 2;
-        const DEPTH_STENCIL = 1 << 3;
-        const TRANSFER_SRC = 1 << 4;
-        const TRANSFER_DST = 1 << 5;
-        const STORAGE = 1 << 6;
-        const PRESENT = 1 << 7;
+    
+    pub fn iter(&self) -> std::slice::Iter<'_, VertexAttribute> {
+        self.attributes.iter()
     }
 }
 
 /// Resource state for barrier synchronization
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ResourceState {
     Undefined,
     Common,
@@ -551,6 +120,9 @@ pub enum ResourceState {
     Present,
     TransferSource,
     TransferDestination,
+    GenericRead,
+    CopyDest,
+    GenericWrite,
 }
 
 /// Buffer type
@@ -571,6 +143,7 @@ pub struct BufferDescription {
     pub size: u64,
     pub usage: BufferUsage,
     pub initial_state: ResourceState,
+    pub initial_data: Option<Vec<u8>>,
 }
 
 impl Default for BufferDescription {
@@ -580,15 +153,13 @@ impl Default for BufferDescription {
             size: 0,
             usage: BufferUsage::VERTEX_BUFFER,
             initial_state: ResourceState::Common,
+            initial_data: None,
         }
     }
 }
 
-/// Alias for BufferDescription
-pub type BufferDesc = BufferDescription;
-
-/// Buffer usage flags
 bitflags::bitflags! {
+    /// Buffer usage flags
     #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
     pub struct BufferUsage: u32 {
         const VERTEX_BUFFER = 1 << 0;
@@ -608,17 +179,19 @@ bitflags::bitflags! {
     }
 }
 
-impl BufferUsage {
-    /// Alias for IMMUTABLE for backwards compatibility
-    pub const Immutable: BufferUsage = BufferUsage::IMMUTABLE;
-    /// Alias for DYNAMIC for backwards compatibility
-    pub const Dynamic: BufferUsage = BufferUsage::DYNAMIC;
-    /// Alias for TRANSIENT for backwards compatibility
-    pub const Transient: BufferUsage = BufferUsage::TRANSIENT;
-    /// Alias for UPLOAD for backwards compatibility
-    pub const Upload: BufferUsage = BufferUsage::UPLOAD;
-    /// Alias for READBACK for backwards compatibility
-    pub const Readback: BufferUsage = BufferUsage::READBACK;
+bitflags::bitflags! {
+    /// Texture usage flags
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+    pub struct TextureUsage: u32 {
+        const SHADER_READ = 1 << 0;
+        const SHADER_WRITE = 1 << 1;
+        const RENDER_TARGET = 1 << 2;
+        const DEPTH_STENCIL = 1 << 3;
+        const TRANSFER_SRC = 1 << 4;
+        const TRANSFER_DST = 1 << 5;
+        const STORAGE = 1 << 6;
+        const PRESENT = 1 << 7;
+    }
 }
 
 /// Sampler filter mode
@@ -682,6 +255,7 @@ pub enum CommandListType {
     Direct,     // Graphics + compute + transfer
     Compute,    // Compute only
     Copy,       // Transfer only
+    Graphics,   // Graphics-only (alias for Direct)
 }
 
 /// Clear value for render targets / depth buffers
@@ -808,6 +382,11 @@ pub enum RhiError {
     QueueFull,
     Timeout,
     Unsupported(String),
+    OperationFailed(String),
+    InvalidResource,
+    OutOfBounds,
+    LockError(String),
+    Other(String),
 }
 
 impl fmt::Display for RhiError {
@@ -824,6 +403,11 @@ impl fmt::Display for RhiError {
             RhiError::QueueFull => write!(f, "Command queue full"),
             RhiError::Timeout => write!(f, "Operation timeout"),
             RhiError::Unsupported(msg) => write!(f, "Unsupported: {}", msg),
+            RhiError::OperationFailed(msg) => write!(f, "Operation failed: {}", msg),
+            RhiError::InvalidResource => write!(f, "Invalid resource"),
+            RhiError::OutOfBounds => write!(f, "Out of bounds"),
+            RhiError::LockError(msg) => write!(f, "Lock error: {}", msg),
+            RhiError::Other(msg) => write!(f, "Other: {}", msg),
         }
     }
 }
@@ -836,12 +420,515 @@ impl From<String> for RhiError {
     }
 }
 
+impl From<&str> for RhiError {
+    fn from(msg: &str) -> Self {
+        RhiError::Other(msg.to_string())
+    }
+}
+
 pub type RhiResult<T> = Result<T, RhiError>;
 
 // Type aliases for backwards compatibility
 pub type TextureDesc = TextureDescription;
 pub type SamplerDesc = SamplerDescription;
 pub type PipelineDesc = PipelineStateObject;
+pub type BufferDesc = BufferDescription;
+
+/// Shader stage enumeration
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ShaderStage {
+    Vertex,
+    Fragment,
+    Compute,
+    Geometry,
+    TessellationControl,
+    TessellationEvaluation,
+}
+
+/// Shader description
+#[derive(Debug, Clone)]
+pub struct ShaderDescription {
+    pub source: Vec<u8>,
+    pub stage: ShaderStage,
+    pub entry_point: String,
+}
+
+impl ShaderDescription {
+    pub fn from_source(source: &str, stage: ShaderStage, entry_point: &str) -> Self {
+        Self {
+            source: source.as_bytes().to_vec(),
+            stage,
+            entry_point: entry_point.to_string(),
+        }
+    }
+}
+
+impl Default for ShaderDescription {
+    fn default() -> Self {
+        Self {
+            source: Vec::new(),
+            stage: ShaderStage::Vertex,
+            entry_point: "main".to_string(),
+        }
+    }
+}
+
+/// Texture dimension
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum TextureDimension {
+    D1,
+    D2,
+    D3,
+    Cube,
+    D1Array,
+    D2Array,
+    CubeArray,
+}
+
+/// Texture type enumeration
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TextureType {
+    Texture1D,
+    Texture2D,
+    Texture3D,
+    TextureCube,
+    Texture1DArray,
+    Texture2DArray,
+    TextureCubeArray,
+}
+
+/// Texture format enumeration
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum TextureFormat {
+    Unknown,
+    R8Unorm,
+    R8Uint,
+    R16Float,
+    R16Uint,
+    R32Float,
+    R32Uint,
+    Rg8Unorm,
+    Rg16Float,
+    Rg32Float,
+    Rgba8Unorm,
+    Rgba8Uint,
+    Rgba8Snorm,
+    Rgba16Float,
+    Rgba32Float,
+    Bgra8Unorm,
+    Depth16Unorm,
+    Depth24Plus,
+    Depth32Float,
+    Stencil8,
+    Depth24PlusStencil8,
+    Depth32FloatStencil8,
+    BC1RgbaUnorm,
+    BC3RgbaUnorm,
+    BC7RgbaUnorm,
+}
+
+/// Texture description
+#[derive(Debug, Clone)]
+pub struct TextureDescription {
+    pub texture_type: TextureType,
+    pub format: TextureFormat,
+    pub width: u32,
+    pub height: u32,
+    pub depth: u32,
+    pub mip_levels: u32,
+    pub array_size: u32,
+    pub usage: TextureUsage,
+    pub initial_state: ResourceState,
+    pub dimension: TextureDimension,
+    pub depth_or_array_layers: u32,
+}
+
+impl Default for TextureDescription {
+    fn default() -> Self {
+        Self {
+            texture_type: TextureType::Texture2D,
+            format: TextureFormat::Rgba8Unorm,
+            width: 1,
+            height: 1,
+            depth: 1,
+            mip_levels: 1,
+            array_size: 1,
+            usage: TextureUsage::SHADER_READ,
+            initial_state: ResourceState::Common,
+            dimension: TextureDimension::D2,
+            depth_or_array_layers: 1,
+        }
+    }
+}
+
+/// Compare function
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum CompareFunc {
+    Never,
+    Less,
+    Equal,
+    LessEqual,
+    Greater,
+    NotEqual,
+    GreaterEqual,
+    Always,
+}
+
+/// Cull mode
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum CullMode {
+    None,
+    Front,
+    Back,
+    FrontAndBack,
+}
+
+/// Fill mode
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum FillMode {
+    Solid,
+    Point,
+    Wireframe,
+}
+
+/// Front face orientation
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum FrontFace {
+    Clockwise,
+    CounterClockwise,
+}
+
+/// Stencil operation
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum StencilOp {
+    Keep,
+    Zero,
+    Replace,
+    IncrClamp,
+    DecrClamp,
+    Invert,
+    IncrWrap,
+    DecrWrap,
+}
+
+/// Blend mode
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum BlendMode {
+    Zero,
+    One,
+    SrcColor,
+    InvSrcColor,
+    SrcAlpha,
+    InvSrcAlpha,
+    DstAlpha,
+    InvDstAlpha,
+    DstColor,
+    InvDstColor,
+    SrcAlphaSaturate,
+}
+
+impl Default for BlendMode {
+    fn default() -> Self {
+        Self::Zero
+    }
+}
+
+/// Blend operation
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum BlendOp {
+    Add,
+    Subtract,
+    RevSubtract,
+    Min,
+    Max,
+}
+
+/// Stencil face state
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct StencilFaceState {
+    pub stencil_fail_op: StencilOp,
+    pub stencil_depth_fail_op: StencilOp,
+    pub stencil_pass_op: StencilOp,
+    pub stencil_func: CompareFunc,
+}
+
+impl Default for StencilFaceState {
+    fn default() -> Self {
+        Self {
+            stencil_fail_op: StencilOp::Keep,
+            stencil_depth_fail_op: StencilOp::Keep,
+            stencil_pass_op: StencilOp::Keep,
+            stencil_func: CompareFunc::Always,
+        }
+    }
+}
+
+/// Stencil state description
+#[derive(Debug, Clone)]
+pub struct StencilState {
+    pub enable: bool,
+    pub reference: u8,
+    pub read_mask: u8,
+    pub write_mask: u8,
+    pub front: StencilOpDesc,
+    pub back: StencilOpDesc,
+}
+
+impl Default for StencilState {
+    fn default() -> Self {
+        Self {
+            enable: false,
+            reference: 0,
+            read_mask: 0xFF,
+            write_mask: 0xFF,
+            front: StencilOpDesc::default(),
+            back: StencilOpDesc::default(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct StencilOpDesc {
+    pub fail_op: StencilOp,
+    pub depth_fail_op: StencilOp,
+    pub pass_op: StencilOp,
+    pub func: CompareFunc,
+}
+
+impl Default for StencilOpDesc {
+    fn default() -> Self {
+        Self {
+            fail_op: StencilOp::Keep,
+            depth_fail_op: StencilOp::Keep,
+            pass_op: StencilOp::Keep,
+            func: CompareFunc::Always,
+        }
+    }
+}
+
+/// Rasterizer state description
+#[derive(Debug, Clone, PartialEq)]
+pub struct RasterizerState {
+    pub fill_mode: FillMode,
+    pub cull_mode: CullMode,
+    pub front_face: FrontFace,
+    pub front_counter_clockwise: bool,
+    pub depth_bias: f32,
+    pub depth_bias_clamp: f32,
+    pub slope_scaled_depth_bias: f32,
+    pub depth_clip_enable: bool,
+    pub scissor_enable: bool,
+    pub multisample_enable: bool,
+    pub antialiased_line_enable: bool,
+}
+
+impl Default for RasterizerState {
+    fn default() -> Self {
+        Self {
+            fill_mode: FillMode::Solid,
+            cull_mode: CullMode::Back,
+            front_face: FrontFace::CounterClockwise,
+            front_counter_clockwise: true,
+            depth_bias: 0.0,
+            depth_bias_clamp: 0.0,
+            slope_scaled_depth_bias: 0.0,
+            depth_clip_enable: true,
+            scissor_enable: false,
+            multisample_enable: false,
+            antialiased_line_enable: false,
+        }
+    }
+}
+
+impl Hash for RasterizerState {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.fill_mode.hash(state);
+        self.cull_mode.hash(state);
+        self.front_face.hash(state);
+        self.front_counter_clockwise.hash(state);
+        self.depth_bias.to_bits().hash(state);
+        self.depth_bias_clamp.to_bits().hash(state);
+        self.slope_scaled_depth_bias.to_bits().hash(state);
+        self.depth_clip_enable.hash(state);
+        self.scissor_enable.hash(state);
+        self.multisample_enable.hash(state);
+        self.antialiased_line_enable.hash(state);
+    }
+}
+
+/// Depth state description
+#[derive(Debug, Clone, PartialEq)]
+pub struct DepthState {
+    pub enabled: bool,
+    pub write_enabled: bool,
+    pub compare_func: CompareFunc,
+}
+
+impl Default for DepthState {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            write_enabled: true,
+            compare_func: CompareFunc::Less,
+        }
+    }
+}
+
+impl Hash for DepthState {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.enabled.hash(state);
+        self.write_enabled.hash(state);
+        self.compare_func.hash(state);
+    }
+}
+
+/// Color blend state description
+#[derive(Debug, Clone, PartialEq)]
+pub struct ColorBlendState {
+    pub enabled: bool,
+    pub logic_op_enable: bool,
+    pub src_blend: BlendMode,
+    pub dst_blend: BlendMode,
+    pub blend_op: BlendOp,
+    pub src_blend_alpha: BlendMode,
+    pub dst_blend_alpha: BlendMode,
+    pub blend_op_alpha: BlendOp,
+    pub logic_op: BlendOp,
+    pub render_target_write_mask: u8,
+}
+
+impl Hash for ColorBlendState {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.enabled.hash(state);
+        self.logic_op_enable.hash(state);
+        self.src_blend.hash(state);
+        self.dst_blend.hash(state);
+        self.blend_op.hash(state);
+        self.src_blend_alpha.hash(state);
+        self.dst_blend_alpha.hash(state);
+        self.blend_op_alpha.hash(state);
+        self.logic_op.hash(state);
+        self.render_target_write_mask.hash(state);
+    }
+}
+
+impl Default for ColorBlendState {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            logic_op_enable: false,
+            src_blend: BlendMode::SrcAlpha,
+            dst_blend: BlendMode::InvSrcAlpha,
+            blend_op: BlendOp::Add,
+            src_blend_alpha: BlendMode::One,
+            dst_blend_alpha: BlendMode::InvSrcAlpha,
+            blend_op_alpha: BlendOp::Add,
+            logic_op: BlendOp::Add,
+            render_target_write_mask: 0xF,
+        }
+    }
+}
+
+/// Primitive topology for draw calls
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum PrimitiveTopology {
+    PointList,
+    LineList,
+    LineStrip,
+    TriangleList,
+    TriangleStrip,
+    TriangleFan,
+    LineListWithAdjacency,
+    LineStripWithAdjacency,
+    TriangleListWithAdjacency,
+    TriangleStripWithAdjacency,
+    PatchList(u8),
+}
+
+impl PrimitiveTopology {
+    pub fn as_u32(&self) -> u32 {
+        match self {
+            PrimitiveTopology::PointList => 0,
+            PrimitiveTopology::LineList => 1,
+            PrimitiveTopology::LineStrip => 2,
+            PrimitiveTopology::TriangleList => 3,
+            PrimitiveTopology::TriangleStrip => 4,
+            PrimitiveTopology::TriangleFan => 5,
+            PrimitiveTopology::LineListWithAdjacency => 6,
+            PrimitiveTopology::LineStripWithAdjacency => 7,
+            PrimitiveTopology::TriangleListWithAdjacency => 8,
+            PrimitiveTopology::TriangleStripWithAdjacency => 9,
+            PrimitiveTopology::PatchList(_) => 10,
+        }
+    }
+}
+
+/// Pipeline state object description
+#[derive(Debug, Clone)]
+pub struct PipelineStateObject {
+    pub vertex_shader: ResourceHandle,
+    pub fragment_shader: ResourceHandle,
+    pub compute_shader: Option<ResourceHandle>,
+    pub geometry_shader: Option<ResourceHandle>,
+    pub hull_shader: Option<ResourceHandle>,
+    pub domain_shader: Option<ResourceHandle>,
+    pub input_layout: InputLayout,
+    pub primitive_topology: PrimitiveTopology,
+    pub rasterizer_state: RasterizerState,
+    pub depth_state: DepthState,
+    pub blend_state: ColorBlendState,
+    pub stencil_state: StencilState,
+    pub color_blend_states: Vec<ColorBlendState>,
+    pub num_render_targets: u32,
+    pub render_target_formats: [TextureFormat; 8],
+    pub depth_stencil_format: TextureFormat,
+    pub sample_count: u32,
+    pub sample_quality: u32,
+}
+
+impl PipelineStateObject {
+    pub fn shaders(&self) -> Vec<ResourceHandle> {
+        let mut shaders = vec![self.vertex_shader, self.fragment_shader];
+        if let Some(cs) = self.compute_shader {
+            shaders.push(cs);
+        }
+        if let Some(gs) = self.geometry_shader {
+            shaders.push(gs);
+        }
+        if let Some(hs) = self.hull_shader {
+            shaders.push(hs);
+        }
+        if let Some(ds) = self.domain_shader {
+            shaders.push(ds);
+        }
+        shaders
+    }
+}
+
+impl Default for PipelineStateObject {
+    fn default() -> Self {
+        Self {
+            vertex_shader: ResourceHandle::INVALID,
+            fragment_shader: ResourceHandle::INVALID,
+            compute_shader: None,
+            geometry_shader: None,
+            hull_shader: None,
+            domain_shader: None,
+            input_layout: InputLayout::default(),
+            primitive_topology: PrimitiveTopology::TriangleList,
+            rasterizer_state: RasterizerState::default(),
+            depth_state: DepthState::default(),
+            blend_state: ColorBlendState::default(),
+            stencil_state: StencilState::default(),
+            color_blend_states: vec![ColorBlendState::default()],
+            num_render_targets: 1,
+            render_target_formats: [TextureFormat::Rgba8Unorm; 8],
+            depth_stencil_format: TextureFormat::Depth32Float,
+            sample_count: 1,
+            sample_quality: 0,
+        }
+    }
+}
 
 /// 4-component color (RGBA)
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -931,6 +1018,7 @@ impl Default for DepthStencilState {
 // Re-export IDevice and ICommandList as RhiDevice and RhiCommandList for backwards compatibility
 pub use super::device::IDevice as RhiDevice;
 pub use super::device::ICommandList as RhiCommandList;
+pub use super::device::IndexFormat;
 
 // Pipeline state types for DX11 pipeline_dx11.rs
 use thiserror::Error;
@@ -958,12 +1046,14 @@ pub trait IShader: Any + Send + Sync {
     fn get_bytecode(&self) -> &[u8];
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
 pub enum InputElementFormat {
     #[default]
     Float32x2,
     Float32x3,
     Float32x4,
+    Float16x2,
+    Float16x4,
     UInt8x4,
     Int8x4,
     UInt16x2,

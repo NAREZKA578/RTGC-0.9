@@ -47,7 +47,7 @@ impl AsyncPhysicsEngine {
 
             while running_clone.load(Ordering::Relaxed) {
                 match msg_receiver.recv() {
-                    Ok(PhysicsMessage::Step { dt, sub_steps }) => {
+                    Ok(PhysicsMessage::Step { dt, sub_steps: _ }) => {
                         // A4: Использовать PhysicsWorld вместо заглушки
                         // Создать временный PhysicsWorld, передать тела, вызвать step()
                         let mut world = PhysicsWorld::new();
@@ -211,7 +211,7 @@ impl AsyncPhysicsEngine {
     }
 
     /// Остановить движок
-    pub fn shutdown(mut self) {
+    pub fn shutdown(self) {
         self.running.store(false, Ordering::Relaxed);
         let _ = self.sender.send(PhysicsMessage::Shutdown);
         let _ = self.receiver.recv();

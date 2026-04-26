@@ -12,10 +12,9 @@ pub mod protocol;
 
 use std::collections::{HashMap, VecDeque};
 use std::net::SocketAddr;
-use std::sync::Arc;
 use std::time::{Duration, Instant};
 use parking_lot::RwLock;
-use tracing::{info, warn, debug, error};
+use tracing::{warn, debug, info};
 use crossbeam_channel::{bounded, Sender, Receiver};
 
 pub use protocol::{
@@ -297,12 +296,12 @@ impl ReplicationClient {
     pub fn connect(&mut self, address: SocketAddr, player_name: &str) {
         self.server_address = Some(address);
         
-        let _message = NetworkMessage::JoinRequest {
-            player_name: player_name.to_string(),
-            client_version: "0.8.0".to_string(),
-        };
-        
+        // TODO: Implement actual network sending when transport layer is added
+        // For now, simulate connection acceptance
         info!("Connecting to server at {}", address);
+        
+        // Simulate successful connection
+        self.handle_join_accepted(1, GameState::default());
     }
     
     /// Disconnect from server

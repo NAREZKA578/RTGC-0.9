@@ -1010,6 +1010,13 @@ impl IFence for Dx12Fence {
         0
     }
 
+    fn set_value(&self, _value: u64) {
+        #[cfg(target_os = "windows")]
+        {
+            // Fence value is set when signaling via command queue
+        }
+    }
+
     fn set_event_on_completion(
         &self,
         value: u64,

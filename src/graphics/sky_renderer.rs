@@ -114,7 +114,7 @@ impl SkyRenderer {
     }
     
     /// Собирает команды рендеринга неба
-    pub fn collect_render_commands(&self, camera_pos: Vector3<f32>) -> Vec<RenderCommand> {
+    pub fn collect_render_commands(&self, _camera_pos: Vector3<f32>) -> Vec<RenderCommand> {
         let mut commands = Vec::with_capacity(2);
         
         // Команда для неба
@@ -142,11 +142,12 @@ impl SkyRenderer {
             return None; // Солнце за горизонтом
         }
         
-        // Преобразуем направление в точку на единичной сфере
-        let sun_point = self.sun_direction;
+        // Преобразуем направление в однородные координаты
+        let sun_dir = self.sun_direction.normalize();
+        let homogeneous = nalgebra::SVector::<f32, 4>::new(sun_dir.x, sun_dir.y, 1.0, 1.0);
         
-        // Преобразуем в clip space
-        let clip_pos = view_proj * nalgebra::Point3::from(sun_point);
+        // Умножаем матрицу 4x4 на вектор 4x1
+        let clip_pos = view_proj * homogeneous;
         
         if clip_pos.w <= 0.0 {
             return None; // Солнце за камерой

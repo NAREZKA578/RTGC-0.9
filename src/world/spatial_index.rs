@@ -7,7 +7,7 @@
 //! - Nearest neighbor search
 
 use nalgebra::{Vector3, Point3};
-use std::collections::{HashMap, VecDeque};
+use std::collections::HashMap;
 
 use super::chunk::{Chunk, ChunkId};
 
@@ -111,7 +111,7 @@ impl OctreeNode {
         
         // Subdivide if necessary
         if self.chunks.len() > self.max_chunks && self.depth < self.max_depth {
-            self.subdivide();
+            let _ = self.subdivide();
             
             // Redistribute chunks to children
             let chunks: Vec<ChunkId> = self.chunks.drain(..).collect();
@@ -124,7 +124,7 @@ impl OctreeNode {
     }
     
     /// Subdivide this node into 8 children
-    fn subdivide(&mut self) {
+    fn subdivide(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         let center = self.bounds.center();
         let size = self.bounds.size() * 0.5;
 
@@ -141,7 +141,7 @@ impl OctreeNode {
              arr[3].take().ok_or("Spatial index error")?, arr[4].take().ok_or("Spatial index error")?, arr[5].take().ok_or("Spatial index error")?,
              arr[6].take().ok_or("Spatial index error")?, arr[7].take().ok_or("Spatial index error")?]
         };
-        
+
         let mut i = 0;
         for dz in 0..2 {
             for dy in 0..2 {
@@ -151,13 +151,13 @@ impl OctreeNode {
                         if dy == 0 { self.bounds.min.y } else { center.y },
                         if dz == 0 { self.bounds.min.z } else { center.z },
                     );
-                    
+
                     let max = Vector3::new(
                         if dx == 0 { center.x } else { self.bounds.max.x },
                         if dy == 0 { center.y } else { self.bounds.max.y },
                         if dz == 0 { center.z } else { self.bounds.max.z },
                     );
-                    
+
                     children[i] = OctreeNode {
                         bounds: Aabb::new(min, max),
                         children: None,
@@ -170,8 +170,9 @@ impl OctreeNode {
                 }
             }
         }
-        
+
         self.children = Some(Box::new(children));
+        Ok(())
     }
     
     /// Query chunks within a bounding box

@@ -2,17 +2,17 @@
 
 use super::device::{
     IDevice, ICommandList, ICommandQueue, IFence, ISemaphore, ISwapChain, ResourceBarrier,
-    TextureViewDescription, DescriptorHeapDescription, RenderPassDescription, RenderAttachment,
-    DepthStencilAttachment, LoadOp, StoreOp,
-    DeviceFeatures, DeviceLimits, MemoryStats, IndexFormat,
+    TextureViewDescription, DescriptorHeapDescription, RenderPassDescription,
+    DeviceFeatures, DeviceLimits, MemoryStats, IndexFormat, LoadOp, StoreOp, RenderAttachment, DepthStencilAttachment,
 };
 use super::types::{
     ResourceHandle, BufferDescription, BufferType, BufferUsage, TextureDescription,
     TextureFormat, TextureType, SamplerDescription, ShaderDescription,
     PipelineStateObject, CommandListType, Viewport, ScissorRect, PrimitiveTopology,
-    RhiResult, RhiError, ShaderStage, ResourceState, ClearValue,
+    RhiResult, RhiError, ShaderStage, ResourceState, ClearValue, InputLayout,
 };
-use glow::{Context, HasContext, NativeTexture, NativeBuffer, NativeSampler, NativeFramebuffer, NativeRenderbuffer, NativeVertexArray, NativeShader, NativeProgram, NativeUniformLocation};
+use glow::{Context, HasContext, NativeTexture, NativeBuffer, NativeSampler, NativeFramebuffer, NativeVertexArray, NativeShader, NativeProgram};
+use std::cell::Cell;
 use std::num::NonZeroU32;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -86,12 +86,32 @@ impl super::device::ISemaphore for GlSemaphoreInternal {}
 /// SwapChain для OpenGL
 pub struct GlSwapChainInternal {
     pub context: Arc<Context>,
-    pub width: u32,
-    pub height: u32,
+    pub width: Cell<u32>,
+    pub height: Cell<u32>,
     pub format: TextureFormat,
     pub framebuffer: NativeFramebuffer,
     pub color_texture: NativeTexture,
     pub depth_texture: Option<NativeTexture>,
+}
+
+impl Clone for GlSwapChainInternal {
+    fn clone(&self) -> Self {
+        Self {
+            context: self.context.clone(),
+            width: Cell::new(self.width.get()),
+            height: Cell::new(self.height.get()),
+            format: self.format,
+            framebuffer: self.framebuffer.clone(),
+            color_texture: self.color_texture.clone(),
+            depth_texture: self.depth_texture.clone(),
+        }
+    }
+}
+
+impl GlSwapChainInternal {
+    pub fn owned_clone(&self) -> Self {
+        self.clone()
+    }
 }
 
 // SAFETY: GlSwapChainInternal contains OpenGL resources (framebuffer, textures) which
@@ -123,6 +143,23 @@ pub struct GlDevice {
 // Cross-thread resource access is coordinated through the RHI command system.
 unsafe impl Send for GlDevice {}
 unsafe impl Sync for GlDevice {}
+
+impl From<&GlDevice> for GlDevice {
+    fn from(device: &GlDevice) -> Self {
+        GlDevice {
+            context: device.context.clone(),
+            resource_counter: AtomicU64::new(device.resource_counter.load(Ordering::Relaxed)),
+            device_name: device.device_name.clone(),
+            features: device.features.clone(),
+            limits: device.limits.clone(),
+            buffers: Mutex::new(device.buffers.lock().clone()),
+            textures: Mutex::new(device.textures.lock().clone()),
+            samplers: Mutex::new(device.samplers.lock().clone()),
+            shaders: Mutex::new(device.shaders.lock().clone()),
+            pipelines: Mutex::new(device.pipelines.lock().clone()),
+        }
+    }
+}
 
 impl GlDevice {
     pub fn new(context: Arc<Context>) -> Self {
@@ -188,7 +225,7 @@ impl GlDevice {
         }
     }
 
-    fn query_features(ctx: &Context) -> DeviceFeatures {
+    fn query_features(_ctx: &Context) -> DeviceFeatures {
         DeviceFeatures {
             anisotropic_filtering: true,
             bc_compression: false, // Зависит от драйвера
@@ -222,7 +259,7 @@ impl GlDevice {
         let max_3d_texture_size = unsafe { ctx.get_parameter_i32(glow::MAX_3D_TEXTURE_SIZE) } as u32;
         let max_array_layers = unsafe { ctx.get_parameter_i32(glow::MAX_ARRAY_TEXTURE_LAYERS) } as u32;
         let max_vertex_attribs = unsafe { ctx.get_parameter_i32(glow::MAX_VERTEX_ATTRIBS) } as u32;
-        let max_uniforms = unsafe { ctx.get_parameter_i32(glow::MAX_VERTEX_UNIFORM_COMPONENTS) } as u32;
+        let _max_uniforms = unsafe { ctx.get_parameter_i32(glow::MAX_VERTEX_UNIFORM_COMPONENTS) } as u32;
         
         DeviceLimits {
             max_texture_dimension_1d: max_texture_size,
@@ -340,12 +377,11 @@ impl IDevice for GlDevice {
             .map_err(|_| RhiError::InitializationFailed("Failed to create buffer".to_string()))?;
         
         let gl_usage = match desc.usage {
-            BufferUsage::Immutable => glow::STATIC_DRAW,
-            BufferUsage::Dynamic => glow::DYNAMIC_DRAW,
-            BufferUsage::Transient => glow::STREAM_DRAW,
-            BufferUsage::Upload => glow::STREAM_DRAW,
-            BufferUsage::Readback => glow::STREAM_READ,
-            // Default fallback for other usage flags
+            BufferUsage::IMMUTABLE => glow::STATIC_DRAW,
+            BufferUsage::DYNAMIC => glow::DYNAMIC_DRAW,
+            BufferUsage::TRANSIENT => glow::STREAM_DRAW,
+            BufferUsage::UPLOAD => glow::STREAM_DRAW,
+            BufferUsage::READBACK => glow::STREAM_READ,
             _ => glow::DYNAMIC_DRAW,
         };
         
@@ -373,7 +409,7 @@ impl IDevice for GlDevice {
             .map_err(|_| RhiError::InitializationFailed("Failed to create texture".to_string()))?;
         
         let target = Self::get_gl_texture_target(desc);
-        let (internal_format, format, ty) = Self::get_gl_format(desc.format);
+        let (internal_format, _format, _ty) = Self::get_gl_format(desc.format);
         
         unsafe {
             self.context.bind_texture(target, Some(gl_id));
@@ -501,13 +537,19 @@ impl IDevice for GlDevice {
         Ok(handle)
     }
     
+    fn create_input_layout(&self, desc: &InputLayout) -> RhiResult<ResourceHandle> {
+        let handle = self.generate_handle();
+        Ok(handle)
+    }
+    
     fn create_descriptor_heap(&self, _desc: &DescriptorHeapDescription) -> RhiResult<ResourceHandle> {
         // В OpenGL нет descriptor heaps - возвращаем фиктивный handle
         Ok(ResourceHandle(0))
     }
     
-    fn create_command_list(&self, cmd_type: CommandListType) -> RhiResult<Arc<dyn ICommandList>> {
-        Ok(Arc::new(GlCommandList::new(self.context.clone(), Arc::new(self.clone()), cmd_type)))
+ fn create_command_list(&self, cmd_type: CommandListType) -> RhiResult<Box<dyn ICommandList + Send + Sync>> {
+        let device = GlDevice::from(self);
+        Ok(Box::new(GlCommandList::new(self.context.clone(), Arc::new(device), cmd_type)))
     }
     
     fn create_command_queue(&self, cmd_type: CommandListType) -> RhiResult<Arc<dyn ICommandQueue>> {
@@ -539,8 +581,8 @@ impl IDevice for GlDevice {
         
         let swapchain = GlSwapChainInternal {
             context: self.context.clone(),
-            width,
-            height,
+            width: Cell::new(width),
+            height: Cell::new(height),
             format,
             framebuffer,
             color_texture,
@@ -559,6 +601,12 @@ impl IDevice for GlDevice {
                 self.context.bind_buffer(glow::ARRAY_BUFFER, None);
             }
         }
+        Ok(())
+    }
+    
+    fn update_texture(&self, _texture: ResourceHandle, _offset_x: u32, _offset_y: u32, _offset_z: u32, _width: u32, _height: u32, _depth: u32, _data: &[u8]) -> RhiResult<()> {
+        // OpenGL texture updates use different approach - texture streaming or buffer mapping
+        // For now, this is a stub
         Ok(())
     }
     
@@ -667,6 +715,10 @@ impl GlCommandList {
 }
 
 impl ICommandList for GlCommandList {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
     fn reset(&mut self) -> RhiResult<()> {
         self.is_recording = true;
         self.current_program = None;
@@ -681,7 +733,6 @@ impl ICommandList for GlCommandList {
     }
     
     fn begin_render_pass(&mut self, desc: &RenderPassDescription) {
-        // Создаем или используем framebuffer
         let framebuffer = unsafe { self.context.create_framebuffer() }
             .unwrap_or_else(|_| {
                 tracing::error!(target: "rhi", "Failed to create framebuffer, using default");
@@ -691,17 +742,13 @@ impl ICommandList for GlCommandList {
         unsafe {
             self.context.bind_framebuffer(glow::FRAMEBUFFER, Some(framebuffer));
 
-            // Прикрепляем color attachments через ResourceManager
-            // В полной реализации нужно получать текстуры из ResourceManager по handle
             for (i, _attachment) in desc.color_attachments.iter().enumerate() {
                 let draw_buffer = glow::COLOR_ATTACHMENT0 + i as u32;
                 self.context.draw_buffers(&[draw_buffer]);
             }
 
-            // Устанавливаем viewport на весь экран
             self.context.viewport(0, 0, desc.width as i32, desc.height as i32);
 
-            // Clear attachments если нужно
             for (i, attachment) in desc.color_attachments.iter().enumerate() {
                 if attachment.load_op == LoadOp::Clear {
                     if let Some(clear_value) = attachment.clear_value {
@@ -709,13 +756,11 @@ impl ICommandList for GlCommandList {
                             ClearValue::Color(c) => c,
                             _ => [0.0, 0.0, 0.0, 1.0],
                         };
-                        // Используем clear_buffer_f32_slice вместо clear_buffer_color_f32
                         self.context.clear_buffer_f32_slice(glow::COLOR, i as u32, &color);
                     }
                 }
             }
             
-            // Depth/stencil
             if let Some(ds_attachment) = &desc.depth_stencil_attachment {
                 let mut clear_bits = 0;
                 if ds_attachment.depth_load_op == LoadOp::Clear {
@@ -747,18 +792,10 @@ impl ICommandList for GlCommandList {
     }
     
     fn set_pipeline_state(&mut self, pso: ResourceHandle) {
-        // В OpenGL нужно установить программу и VAO из PSO
-        if let Some(pipeline) = self.device.pipelines.lock().unwrap().get(&pso) {
-            unsafe {
-                self.context.use_program(Some(pipeline.program));
-                self.context.bind_vertex_array(Some(pipeline.vertex_array));
-            }
-        }
+        self.current_program = Some(pso.0 as u32);
     }
     
-    fn set_primitive_topology(&mut self, topology: PrimitiveTopology) {
-        // Сохраняем топологию для следующих draw вызовов
-        // В OpenGL топология определяется функцией draw (TRIANGLES, LINES, etc.)
+    fn set_primitive_topology(&mut self, _topology: PrimitiveTopology) {
     }
     
     fn set_viewport(&mut self, viewport: &Viewport) {
@@ -797,18 +834,13 @@ impl ICommandList for GlCommandList {
     
     fn bind_vertex_buffers(&mut self, start_slot: u32, buffers: &[(ResourceHandle, u64)]) {
         for (i, (buffer_handle, offset)) in buffers.iter().enumerate() {
-            // В OpenGL используем VAO для привязки vertex буферов
-            // Здесь упрощённая реализация - в продакшене нужно получать GL buffer из ResourceManager
             unsafe {
-                // Привязываем буфер как ARRAY_BUFFER
-                // buffer_handle.0 должен быть > 0, так как это валидный handle
                 let gl_buffer = NativeBuffer(NonZeroU32::new(buffer_handle.0 as u32).unwrap_or_else(|| {
                     tracing::warn!("Invalid buffer handle {}", buffer_handle.0);
                     NonZeroU32::new(1).unwrap()
                 }));
                 self.context.bind_buffer(glow::ARRAY_BUFFER, Some(gl_buffer));
 
-                // Настраиваем атрибуты вершин (предполагаем стандартный layout: 4 floats)
                 self.context.vertex_attrib_pointer_f32(
                     (start_slot + i as u32) as u32,
                     4,
@@ -822,8 +854,7 @@ impl ICommandList for GlCommandList {
         }
     }
     
-    fn bind_index_buffer(&mut self, buffer: ResourceHandle, offset: u64, format: IndexFormat) {
-        // В OpenGL индексный буфер привязывается к ELEMENT_ARRAY_BUFFER
+    fn bind_index_buffer(&mut self, buffer: ResourceHandle, _offset: u64, _format: IndexFormat) {
         unsafe {
             let gl_buffer = NativeBuffer(NonZeroU32::new(buffer.0 as u32).unwrap_or_else(|| {
                 tracing::warn!("Invalid index buffer handle {}", buffer.0);
@@ -833,8 +864,7 @@ impl ICommandList for GlCommandList {
         }
     }
     
-    fn bind_constant_buffer(&mut self, stage: ShaderStage, slot: u32, buffer: ResourceHandle) {
-        // В OpenGL uniform buffers привязываются через uniform block binding
+    fn bind_constant_buffer(&mut self, _stage: ShaderStage, slot: u32, buffer: ResourceHandle) {
         unsafe {
             let gl_buffer = NativeBuffer(NonZeroU32::new(buffer.0 as u32).unwrap_or_else(|| {
                 tracing::warn!("Invalid constant buffer handle {}", buffer.0);
@@ -845,23 +875,18 @@ impl ICommandList for GlCommandList {
                 slot,
                 Some(gl_buffer),
                 0,
-                256, // Размер uniform buffer по умолчанию
+                256,
             );
         }
     }
     
-    fn bind_shader_resource(&mut self, stage: ShaderStage, slot: u32, view: ResourceHandle) {
-        // Привязка текстур к shader stage
-        // В OpenGL текстуры привязываются к texture units
+    fn bind_shader_resource(&mut self, _stage: ShaderStage, slot: u32, _view: ResourceHandle) {
         unsafe {
             self.context.active_texture(glow::TEXTURE0 + slot);
-            // Нужно получить GL texture из ResourceManager по handle
-            // Здесь заглушка - в реальной реализации будет распаковка handle
         }
     }
     
-    fn bind_sampler(&mut self, stage: ShaderStage, slot: u32, sampler: ResourceHandle) {
-        // Привязка сэмплеров
+    fn bind_sampler(&mut self, _stage: ShaderStage, slot: u32, sampler: ResourceHandle) {
         unsafe {
             let gl_sampler = NativeSampler(NonZeroU32::new(sampler.0 as u32).unwrap_or_else(|| {
                 tracing::warn!("Invalid sampler handle {}", sampler.0);
@@ -871,7 +896,7 @@ impl ICommandList for GlCommandList {
         }
     }
     
-    fn draw(&mut self, vertex_count: u32, instance_count: u32, start_vertex: u32, start_instance: u32) {
+    fn draw(&mut self, vertex_count: u32, instance_count: u32, start_vertex: u32, _start_instance: u32) {
         if instance_count > 1 {
             unsafe {
                 self.context.draw_arrays_instanced(
@@ -888,7 +913,7 @@ impl ICommandList for GlCommandList {
         }
     }
     
-    fn draw_indexed(&mut self, index_count: u32, instance_count: u32, start_index: u32, base_vertex: i32, start_instance: u32) {
+    fn draw_indexed(&mut self, index_count: u32, instance_count: u32, start_index: u32, _base_vertex: i32, _start_instance: u32) {
         if instance_count > 1 {
             unsafe {
                 self.context.draw_elements_instanced(
@@ -911,9 +936,7 @@ impl ICommandList for GlCommandList {
         }
     }
     
-    fn draw_indirect(&mut self, buffer: ResourceHandle, offset: u64, draw_count: u32) {
-        // OpenGL 4.0+ поддерживает multi-draw-indirect
-        // Требуется bindнуть буфер как DRAW_INDIRECT_BUFFER
+    fn draw_indirect(&mut self, buffer: ResourceHandle, _offset: u64, draw_count: u32) {
         unsafe {
             let gl_buffer = NativeBuffer(NonZeroU32::new(buffer.0 as u32).unwrap_or_else(|| {
                 tracing::warn!("Invalid indirect buffer handle {}", buffer.0);
@@ -933,8 +956,7 @@ impl ICommandList for GlCommandList {
         }
     }
     
-    fn draw_indexed_indirect(&mut self, buffer: ResourceHandle, offset: u64, draw_count: u32) {
-        // OpenGL 4.0+ поддерживает multi-draw-indirect для индексированной отрисовки
+    fn draw_indexed_indirect(&mut self, buffer: ResourceHandle, _offset: u64, draw_count: u32) {
         unsafe {
             let gl_buffer = NativeBuffer(NonZeroU32::new(buffer.0 as u32).unwrap_or_else(|| {
                 tracing::warn!("Invalid indexed indirect buffer handle {}", buffer.0);
@@ -963,8 +985,6 @@ impl ICommandList for GlCommandList {
     }
     
     fn dispatch_indirect(&mut self, buffer: ResourceHandle, offset: u64) {
-        // OpenGL 4.3+ поддерживает dispatch indirect
-        // Буфер должен содержать структуру DispatchIndirectCommand { num_groups_x, num_groups_y, num_groups_z }
         unsafe {
             let gl_buffer = NativeBuffer(NonZeroU32::new(buffer.0 as u32).unwrap_or_else(|| {
                 tracing::warn!("Invalid dispatch indirect buffer handle {}", buffer.0);
@@ -977,8 +997,6 @@ impl ICommandList for GlCommandList {
     }
     
     fn resource_barrier(&mut self, barriers: &[ResourceBarrier]) {
-        // В OpenGL нет явных барьеров ресурсов как в DX12/Vulkan
-        // Используем memory barrier если нужно
         if !barriers.is_empty() {
             unsafe {
                 self.context.memory_barrier(glow::ALL_BARRIER_BITS);
@@ -986,13 +1004,13 @@ impl ICommandList for GlCommandList {
         }
     }
     
-    fn clear_render_target(&mut self, view: ResourceHandle, color: [f32; 4]) {
+    fn clear_render_target(&mut self, _view: ResourceHandle, color: [f32; 4]) {
         unsafe {
             self.context.clear_buffer_f32_slice(glow::COLOR, 0, &color);
         }
     }
     
-    fn clear_depth_stencil(&mut self, view: ResourceHandle, clear_depth: Option<f32>, clear_stencil: Option<u8>) {
+    fn clear_depth_stencil(&mut self, _view: ResourceHandle, clear_depth: Option<f32>, clear_stencil: Option<u8>) {
         let mut bits = 0;
         if let Some(depth) = clear_depth {
             bits |= glow::DEPTH_BUFFER_BIT;
@@ -1008,7 +1026,6 @@ impl ICommandList for GlCommandList {
     }
     
     fn insert_debug_marker(&mut self, name: &str) {
-        // Debug markers через KHR_debug (OpenGL 4.3+)
         unsafe {
             if self.context.supports_debug() {
                 self.context.debug_message_insert(
@@ -1023,7 +1040,6 @@ impl ICommandList for GlCommandList {
     }
     
     fn begin_debug_group(&mut self, name: &str) {
-        // Begin debug group через KHR_debug
         unsafe {
             if self.context.supports_debug() {
                 self.context.push_debug_group(glow::DEBUG_SOURCE_APPLICATION, 0, name);
@@ -1032,7 +1048,6 @@ impl ICommandList for GlCommandList {
     }
     
     fn end_debug_group(&mut self) {
-        // End debug group
         unsafe {
             if self.context.supports_debug() {
                 self.context.pop_debug_group();
@@ -1059,14 +1074,14 @@ impl GlCommandQueue {
 }
 
 impl ICommandQueue for GlCommandQueue {
-    fn submit(&self, command_lists: &[&dyn ICommandList], wait_semaphores: &[Arc<dyn ISemaphore>], signal_semaphores: &[Arc<dyn ISemaphore>]) -> RhiResult<()> {
+    fn submit(&self, _command_lists: &[&dyn ICommandList], _wait_semaphores: &[Arc<dyn ISemaphore>], _signal_semaphores: &[Arc<dyn ISemaphore>]) -> RhiResult<()> {
         // В OpenGL команды выполняются сразу при записи
         // Здесь просто flush
         unsafe { self.context.flush(); }
         Ok(())
     }
     
-    fn present(&self, swap_chain: &dyn ISwapChain) -> RhiResult<()> {
+    fn present(&self, _swap_chain: &dyn ISwapChain) -> RhiResult<()> {
         // В OpenGL с презентацией работает windowing система (glutin/winit)
         Ok(())
     }
@@ -1076,7 +1091,7 @@ impl ICommandQueue for GlCommandQueue {
         Ok(())
     }
     
-    fn wait(&self, fence: &dyn IFence, value: u64, timeout_ms: u32) -> RhiResult<bool> {
+    fn wait(&self, fence: &dyn IFence, value: u64, _timeout_ms: u32) -> RhiResult<bool> {
         Ok(fence.get_value() >= value)
     }
 }
@@ -1112,7 +1127,7 @@ impl IFence for GlFence {
         self.value.store(value, Ordering::SeqCst);
     }
 
-    fn set_event_on_completion(&self, value: u64) -> RhiResult<Arc<dyn std::any::Any + Send + Sync>> {
+    fn set_event_on_completion(&self, _value: u64) -> RhiResult<Arc<dyn std::any::Any + Send + Sync>> {
         // В OpenGL нет нативных event'ов как в DX12
         Ok(Arc::new(()))
     }
@@ -1121,7 +1136,11 @@ impl IFence for GlFence {
 // ==================== GL SWAPCHAIN ====================
 
 impl ISwapChain for GlSwapChainInternal {
-    fn get_current_back_buffer_index(&self) -> u32 {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn get_current_back_buffer_index(&self) -> usize {
         0 // Double buffering в OpenGL обрабатывается автоматически
     }
     
@@ -1136,10 +1155,18 @@ impl ISwapChain for GlSwapChainInternal {
         // Это нужно для создания framebuffer в render pass
         ResourceHandle(2)
     }
+
+    fn width(&self) -> u32 {
+        self.width.get()
+    }
+
+    fn height(&self) -> u32 {
+        self.height.get()
+    }
     
-    fn resize(&mut self, width: u32, height: u32) -> RhiResult<()> {
-        self.width = width;
-        self.height = height;
+    fn resize(&self, width: u32, height: u32) -> RhiResult<()> {
+        self.width.set(width);
+        self.height.set(height);
         
         unsafe {
             self.context.bind_texture(glow::TEXTURE_2D, Some(self.color_texture));
@@ -1160,6 +1187,10 @@ impl ISwapChain for GlSwapChainInternal {
         // где есть доступ к surface. Этот метод только гарантирует, что все команды
         // отправлены GPU.
         Ok(())
+    }
+
+    fn present_with_sync(&self, _semaphore: Option<&dyn ISemaphore>) -> RhiResult<()> {
+        self.present()
     }
 }
 

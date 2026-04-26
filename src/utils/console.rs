@@ -1,7 +1,7 @@
 //! Console System - Simple in-game console for debug commands
 
 use std::collections::HashMap;
-use tracing::{info, warn};
+use tracing::info;
 
 /// Console command callback type
 pub type CommandCallback = Box<dyn Fn(&[String]) -> Result<String, String> + Send + Sync>;

@@ -228,6 +228,14 @@ impl ISwapChain for Dx11SwapChain {
         self.handle
     }
 
+    fn width(&self) -> u32 {
+        self.width
+    }
+
+    fn height(&self) -> u32 {
+        self.height
+    }
+
     fn resize(&mut self, width: u32, height: u32) -> RhiResult<()> {
         info!(target: "dx11", "Resize swapchain: {}x{}", width, height);
 

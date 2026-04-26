@@ -2,8 +2,7 @@
 //! Менеджер жизненного цикла чанков
 
 use crate::world::chunk::Chunk;
-use crate::world::{generate_chunk_mesh, CHUNK_SIZE, HEIGHTMAP_RESOLUTION};
-use nalgebra::Vector3;
+use crate::world::generate_chunk_mesh;
 use std::collections::{HashMap, HashSet};
 
 /// Координаты чанка

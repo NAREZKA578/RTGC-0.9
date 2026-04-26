@@ -1,7 +1,7 @@
 //! Input mapping - Action mapping and key rebinding
 
 use std::collections::HashMap;
-use winit::keyboard::{KeyCode, NamedKey};
+use winit::keyboard::KeyCode;
 
 /// Represents an input action that can be mapped to keys/buttons
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

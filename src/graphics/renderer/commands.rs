@@ -3,7 +3,7 @@
 //! Этот модуль содержит команды для SceneRenderer и UIRenderer
 
 use crate::graphics::rhi::ResourceHandle;
-use nalgebra::Matrix4;
+use nalgebra::{Matrix4, Vector3};
 
 /// Команды рендеринга сцены
 #[derive(Debug, Clone)]
@@ -44,6 +44,30 @@ pub enum RenderCommand {
         vertices: Vec<[f32; 3]>,
         colors: Vec<[f32; 4]>,
     },
+    /// Деформация меша (для повреждений транспорта)
+    MeshDeform {
+        mesh: ResourceHandle,
+        deformations: Vec<(usize, Vector3<f32>)>,
+    },
+}
+
+impl RenderCommand {
+    /// Добавить смещение вершины (для деформаций)
+    pub fn add_vertex_displacement(&mut self, vertex_idx: usize, offset: Vector3<f32>) {
+        // Найдём или создадим вариант деформации
+        match self {
+            RenderCommand::MeshDeform { deformations, .. } => {
+                deformations.push((vertex_idx, offset));
+            }
+            _ => {
+                // Заменяем на деформацию
+                *self = RenderCommand::MeshDeform {
+                    mesh: ResourceHandle::default(),
+                    deformations: vec![(vertex_idx, offset)],
+                };
+            }
+        }
+    }
 }
 
 /// Команды рендеринга UI

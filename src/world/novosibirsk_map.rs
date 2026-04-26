@@ -3,7 +3,6 @@
 //! Включает: Новосибирск, Бердск, Обь, Кольцово, аэропорт Толмачёво
 
 use serde::{Deserialize, Serialize};
-use nalgebra::Vector3;
 
 /// Основная конфигурация карты
 #[derive(Debug, Clone, Serialize, Deserialize)]

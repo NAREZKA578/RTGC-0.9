@@ -1,9 +1,6 @@
 //! Resource management stub module
 //! TODO: Implement proper resource management
 
-use std::collections::HashMap;
-use std::sync::RwLock;
-
 pub struct ResourceManager;
 
 impl ResourceManager {

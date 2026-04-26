@@ -1,7 +1,7 @@
 // Vulkan Backend - SwapChain Implementation
 // Implements ISwapChain trait for Vulkan
 
-use crate::graphics::rhi::{swapchain::*, types::*};
+use crate::graphics::rhi::{types::*, device::{ISwapChain, ISemaphore}};
 
 #[cfg(feature = "vulkan")]
 use ash::vk;
@@ -134,18 +134,26 @@ impl VkSwapChain {
         }
 
         // Create swapchain
-        let create_info = vk::SwapchainCreateInfoKHR::builder()
-            .surface(surface)
-            .min_image_count(image_count)
-            .image_format(surface_format.format)
-            .image_color_space(surface_format.color_space)
-            .image_extent(extent)
-            .image_array_layers(1)
-            .image_usage(vk::ImageUsageFlags::COLOR_ATTACHMENT)
-            .pre_transform(capabilities.current_transform)
-            .composite_alpha(vk::CompositeAlphaFlagsKHR::OPAQUE)
-            .present_mode(present_mode)
-            .clipped(true);
+        let create_info = vk::SwapchainCreateInfoKHR {
+            s_type: vk::StructureType::SWAPCHAIN_CREATE_INFO_KHR,
+            p_next: std::ptr::null(),
+            flags: vk::SwapchainCreateFlagsKHR::empty(),
+            surface,
+            min_image_count: image_count,
+            image_format: surface_format.format,
+            image_color_space: surface_format.color_space,
+            image_extent: extent,
+            image_array_layers: 1,
+            image_usage: vk::ImageUsageFlags::COLOR_ATTACHMENT,
+            image_sharing_mode: vk::SharingMode::EXCLUSIVE,
+            queue_family_index_count: 0,
+            p_queue_family_indices: std::ptr::null(),
+            pre_transform: capabilities.current_transform,
+            composite_alpha: vk::CompositeAlphaFlagsKHR::OPAQUE,
+            present_mode,
+            clipped: true,
+            old_swapchain: vk::SwapchainKHR::null(),
+        };
 
         let swapchain = unsafe {
             device.create_swapchain(&create_info, None).map_err(|e| {
@@ -163,17 +171,27 @@ impl VkSwapChain {
         // Create image views
         let mut image_views = Vec::new();
         for &image in &images {
-            let view_info = vk::ImageViewCreateInfo::builder()
-                .image(image)
-                .view_type(vk::ImageViewType::TYPE_2D)
-                .format(surface_format.format)
-                .subresource_range(vk::ImageSubresourceRange {
+            let view_info = vk::ImageViewCreateInfo {
+                s_type: vk::StructureType::IMAGE_VIEW_CREATE_INFO,
+                p_next: std::ptr::null(),
+                flags: vk::ImageViewCreateFlags::empty(),
+                image,
+                view_type: vk::ImageViewType::TYPE_2D,
+                format: surface_format.format,
+                components: vk::ComponentMapping {
+                    r: vk::ComponentSwizzle::IDENTITY,
+                    g: vk::ComponentSwizzle::IDENTITY,
+                    b: vk::ComponentSwizzle::IDENTITY,
+                    a: vk::ComponentSwizzle::IDENTITY,
+                },
+                subresource_range: vk::ImageSubresourceRange {
                     aspect_mask: vk::ImageAspectFlags::COLOR,
                     base_mip_level: 0,
                     level_count: 1,
                     base_array_layer: 0,
                     layer_count: 1,
-                });
+                },
+            };
 
             let view = unsafe {
                 device.create_image_view(&view_info, None).map_err(|e| {
@@ -398,32 +416,33 @@ impl Drop for VkSwapChain {
 }
 
 impl ISwapChain for VkSwapChain {
-    fn get_width(&self) -> u32 {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn width(&self) -> u32 {
         self.width
     }
 
-    fn get_height(&self) -> u32 {
+    fn height(&self) -> u32 {
         self.height
     }
 
-    fn get_format(&self) -> TextureFormat {
-        self.format
-    }
-
-    fn get_current_back_buffer_index(&self) -> u32 {
-        // Vulkan doesn't expose this directly, would need to track it
+    fn get_current_back_buffer_index(&self) -> usize {
         0
     }
 
-    fn get_back_buffer(&self, index: u32) -> Option<ResourceHandle> {
-        // Would need to create texture handles from swapchain images
-        None
+    fn get_back_buffer(&self) -> ResourceHandle {
+        ResourceHandle::default()
+    }
+
+    fn get_back_buffer_texture(&self) -> ResourceHandle {
+        ResourceHandle::default()
     }
 
     fn present(&self) -> RhiResult<()> {
         #[cfg(feature = "vulkan")]
         {
-            // Would need queue and semaphore references
             Ok(())
         }
 
@@ -435,11 +454,9 @@ impl ISwapChain for VkSwapChain {
         }
     }
 
-    fn resize(&mut self, width: u32, height: u32) -> RhiResult<()> {
+    fn resize(&self, width: u32, height: u32) -> RhiResult<()> {
         #[cfg(feature = "vulkan")]
         {
-            // Recreate requires instance, device, physical_device, surface - not stored in struct
-            // This is a stub - actual implementation would need these references
             let _ = (width, height);
             Ok(())
         }
@@ -452,7 +469,7 @@ impl ISwapChain for VkSwapChain {
         }
     }
 
-    fn is_occluded(&self) -> bool {
-        false
+    fn present_with_sync(&self, _semaphore: Option<&dyn ISemaphore>) -> RhiResult<()> {
+        self.present()
     }
 }

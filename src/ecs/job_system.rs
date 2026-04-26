@@ -177,12 +177,12 @@ pub struct JobSystem {
 
 impl JobSystem {
     /// Создание новой системы задач
-    pub fn new() -> Self {
+    pub fn new() -> Arc<Self> {
         Self::with_config(JobSystemConfig::default())
     }
     
     /// Создание системы с конфигурацией
-    pub fn with_config(config: JobSystemConfig) -> Self {
+     pub fn with_config(config: JobSystemConfig) -> Arc<Self> {
         let (job_sender, job_receiver) = bounded(config.queue_size);
         let (result_sender, result_receiver) = bounded(config.queue_size);
         
@@ -212,17 +212,17 @@ impl JobSystem {
                 .spawn(move || {
                     sys.worker_loop(i);
                 })
-                .map_err(|e| crate::error::EngineError::Physics(format!("Thread spawn failed: {}", e)))?; // Критично: не можем продолжить без рабочего потока
+                .expect("Critical: Failed to spawn worker thread - cannot continue without working threads");
             
             // Безопасно добавляем handle в mutex
             system.workers.lock().push(handle);
         }
         
-        Arc::into_inner(system).ok_or("Arc reference leak detected")? // Критично: проверка на утечку ссылок
+        system
     }
     
     /// Главный цикл рабочего потока
-    fn worker_loop(&self, worker_id: usize) {
+    fn worker_loop(&self, _worker_id: usize) {
         while !self.shutdown.load(Ordering::Relaxed) {
             // Попытка получить задачу из канала
             if let Ok(job) = self.job_receiver.recv_timeout(std::time::Duration::from_millis(10)) {
@@ -237,7 +237,7 @@ impl JobSystem {
                     job.job.execute();
                 }));
                 
-                let execution_time = start.elapsed();
+                let _execution_time = start.elapsed();
 
                 // Отправка результата
                 let job_result = match result {

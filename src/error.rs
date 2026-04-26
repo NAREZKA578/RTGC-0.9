@@ -2,7 +2,6 @@
 //! Provides centralized error types and utilities
 
 use std::error::Error;
-use std::fmt;
 use thiserror::Error;
 use tracing;
 

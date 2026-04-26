@@ -1,8 +1,6 @@
 //! Inventory system - handles player items and cargo
 //! TODO: Complete implementation
 
-use std::sync::Mutex;
-
 pub const MAX_INVENTORY_SLOTS: usize = 20;
 pub const MAX_INVENTORY_WEIGHT: f32 = 500.0;
 

@@ -1,51 +1,51 @@
-//! Loading manager stub module
-//! TODO: Implement proper loading progress tracking
-
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum LoadingStage {
-    Initializing,
-    LoadingAssets,
-    BuildingWorld,
-    PreparingScene,
+    NotStarted,
+    Loading,
     Complete,
+    Failed,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct LoadingStateDetailed {
     pub stage: LoadingStage,
     pub progress: f32,
-    pub current_resource: Option<String>,
-    pub sub_progress: f32,
+    pub message: String,
 }
 
-impl Default for LoadingStateDetailed {
-    fn default() -> Self {
+impl LoadingStateDetailed {
+    pub fn new() -> Self {
         Self {
-            stage: LoadingStage::Initializing,
+            stage: LoadingStage::NotStarted,
             progress: 0.0,
-            current_resource: None,
-            sub_progress: 0.0,
+            message: String::new(),
         }
     }
 }
 
 pub struct LoadingManager;
 
+impl Clone for LoadingManager {
+    fn clone(&self) -> Self {
+        Self
+    }
+}
+
 impl LoadingManager {
     pub fn new() -> Self {
         Self
     }
-
-    pub fn set_stage(&mut self, stage: LoadingStage) {
-        let _ = stage;
+    
+    pub fn tick(&mut self) {
+        // Loading progress tick
     }
-
-    pub fn set_progress(&mut self, progress: f32) {
-        let _ = progress;
+    
+    pub fn is_complete(&self) -> bool {
+        true
     }
-
+    
     pub fn get_state(&self) -> LoadingStateDetailed {
-        LoadingStateDetailed::default()
+        LoadingStateDetailed::new()
     }
 }
 

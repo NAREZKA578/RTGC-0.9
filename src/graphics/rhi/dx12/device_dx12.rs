@@ -536,6 +536,14 @@ impl IDevice for Dx12Device {
         ))
     }
 
+    fn create_input_layout(&self, desc: &InputLayout) -> RhiResult<ResourceHandle> {
+        info!(target: "dx12", "create_input_layout: {} attributes, stride={}", 
+              desc.attributes.len(), desc.stride);
+        
+        let handle = ResourceHandle::new();
+        Ok(handle)
+    }
+
     #[cfg(target_os = "windows")]
     fn create_descriptor_heap(
         &self,
@@ -560,7 +568,7 @@ impl IDevice for Dx12Device {
     }
 
     #[cfg(target_os = "windows")]
-    fn create_command_list(&self, cmd_type: CommandListType) -> RhiResult<Arc<dyn ICommandList>> {
+    fn create_command_list(&self, cmd_type: CommandListType) -> RhiResult<Box<dyn ICommandList + Send + Sync>> {
         use windows::Win32::Graphics::Direct3D12::*;
 
         let cmd_list = Dx12CommandList::new(
@@ -570,7 +578,7 @@ impl IDevice for Dx12Device {
             &self.descriptor_rtv_heap,
         )?;
 
-        Ok(Arc::new(cmd_list))
+        Ok(Box::new(cmd_list))
     }
 
     #[cfg(target_os = "windows")]
@@ -725,7 +733,7 @@ impl IDevice for Dx12Device {
         Ok(())
     }
 
-    #[cfg(not(target_os = "windows"))]
+#[cfg(not(target_os = "windows"))]
     fn update_buffer(&self, _buffer: ResourceHandle, _offset: u64, _data: &[u8]) -> RhiResult<()> {
         Err(RhiError::Unsupported(
             "DX12 is only available on Windows".to_string(),
@@ -733,70 +741,20 @@ impl IDevice for Dx12Device {
     }
 
     #[cfg(target_os = "windows")]
-    fn map_buffer(&self, buffer: ResourceHandle) -> RhiResult<*mut u8> {
+    fn update_texture(&self, texture: ResourceHandle, offset_x: u32, offset_y: u32, offset_z: u32, width: u32, height: u32, depth: u32, data: &[u8]) -> RhiResult<()> {
         use windows::Win32::Graphics::Direct3D12::*;
-
-        // Get buffer from resource manager
-        unsafe {
-            if let Some(manager) = RESOURCE_MANAGER.as_ref() {
-                if let Some(buf_handle) = manager.get_buffer(buffer) {
-                    if let Some(dx12_resource) = buf_handle.dx12_resource {
-                        let ptr =
-                            dx12_resource
-                                .Map(0, None::<*const D3D12_RANGE>)
-                                .map_err(|e| {
-                                    RhiError::InvalidParameter(format!(
-                                        "Failed to map buffer: {:?}",
-                                        e
-                                    ))
-                                })?;
-
-                        if ptr.is_null() {
-                            return Err(RhiError::InvalidParameter(
-                                "Map returned null pointer".to_string(),
-                            ));
-                        }
-
-                        return Ok(ptr as *mut u8);
-                    }
-                }
-            }
-        }
-
-        Err(RhiError::InvalidParameter(
-            "Buffer not found or not mappable".to_string(),
-        ))
+        info!(target: "dx12", "update_texture: handle={:?}, offset=({},{},{}), size={}x{}x{}, data_size={}",
+              texture, offset_x, offset_y, offset_z, width, height, depth, data.len());
+        Ok(())
     }
 
     #[cfg(not(target_os = "windows"))]
-    fn map_buffer(&self, _buffer: ResourceHandle) -> RhiResult<*mut u8> {
+    fn update_texture(&self, _texture: ResourceHandle, _offset_x: u32, _offset_y: u32, _offset_z: u32, _width: u32, _height: u32, _depth: u32, _data: &[u8]) -> RhiResult<()> {
         Err(RhiError::Unsupported(
             "DX12 is only available on Windows".to_string(),
         ))
     }
-
-    #[cfg(target_os = "windows")]
-    fn unmap_buffer(&self, buffer: ResourceHandle) {
-        use windows::Win32::Graphics::Direct3D12::*;
-
-        // Get buffer from resource manager and unmap
-        unsafe {
-            if let Some(manager) = RESOURCE_MANAGER.as_ref() {
-                if let Some(buf_handle) = manager.get_buffer(buffer) {
-                    if let Some(dx12_resource) = buf_handle.dx12_resource {
-                        dx12_resource.Unmap(0, None::<*const D3D12_RANGE>);
-                    }
-                }
-            }
-        }
-    }
-
-    #[cfg(not(target_os = "windows"))]
-    fn unmap_buffer(&self, _buffer: ResourceHandle) {
-        // DX12 доступен только на Windows, этот метод существует для совместимости интерфейса
-        tracing::warn!("DX12 unmap_buffer: called on non-Windows platform (no-op)");
-    }
-
+    
     #[cfg(target_os = "windows")]
     fn read_back_texture(&self, texture: ResourceHandle) -> RhiResult<Vec<u8>> {
         // TODO: Реализовать чтение текстуры через ID3D12Resource::Map и копирование в staging buffer

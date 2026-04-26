@@ -1,10 +1,10 @@
 //! Prop Spawner for RTGC-0.8
 //! Расстановка объектов на террейне (деревья, здания, камни и т.д.)
 
-use nalgebra::{Vector3, Point3};
+use nalgebra::Vector3;
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
-use crate::world::chunk::{Chunk, ChunkId, CHUNK_SIZE};
+use crate::world::chunk::{ChunkId, CHUNK_SIZE};
 
 /// Тип пропса (объекта)
 #[derive(Debug, Clone, Copy, PartialEq)]

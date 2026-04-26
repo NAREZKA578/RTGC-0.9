@@ -1,11 +1,12 @@
 //! Configuration module for RTGC engine
 //! Provides centralized configuration for all engine subsystems
+//! Supports TOML format for better readability and maintenance
 
-use crate::error::{ConfigError, EngineError, Result};
+use crate::error::{ConfigError, Result};
 use crate::utils::sanitize_path as utils_sanitize_path;
 use serde::{Deserialize, Serialize};
-use std::path::{Component, Path, PathBuf};
-use tracing::{info, warn};
+use std::path::Path;
+use tracing::info;
 
 type ConfigResult = std::result::Result<(), ConfigError>;
 
@@ -17,6 +18,7 @@ pub struct Config {
     pub world: WorldConfig,
     pub input: InputConfig,
     pub audio: AudioConfig,
+    pub network: NetworkConfig,
 }
 
 impl Default for Config {
@@ -27,26 +29,27 @@ impl Default for Config {
             world: WorldConfig::default(),
             input: InputConfig::default(),
             audio: AudioConfig::default(),
+            network: NetworkConfig::default(),
         }
     }
 }
 
 impl Config {
-    /// Load configuration from a JSON file with validation
+    /// Load configuration from a TOML file
     pub fn load<P: AsRef<Path>>(path: P) -> Result<Self> {
         let content = std::fs::read_to_string(path.as_ref()).map_err(|e| {
-            ConfigError::FileReadError(format!("Failed to read config file: {}", e))
+            ConfigError::FileReadError(format!("Failed to read config: {}", e))
         })?;
-        let config: Config = serde_json::from_str(&content)
-            .map_err(|e| ConfigError::ParseError(format!("Invalid JSON format: {}", e)))?;
-
-        // Validate all sections
+        
+        let config: Config = toml::from_str(&content).map_err(|e| {
+            ConfigError::ParseError(format!("Failed to parse config: {}", e))
+        })?;
+        
         config.validate()?;
-
-        info!("Configuration loaded and validated successfully");
+        info!("Config loaded from {:?}", path.as_ref());
         Ok(config)
     }
-
+    
     /// Validate all configuration sections
     pub fn validate(&self) -> ConfigResult {
         self.graphics.validate()?;
@@ -54,10 +57,11 @@ impl Config {
         self.world.validate()?;
         self.input.validate()?;
         self.audio.validate()?;
+        self.network.validate()?;
         Ok(())
     }
 
-    /// Save configuration to a JSON file
+    /// Save configuration to a TOML file
     pub fn save<P: AsRef<Path>>(&self, path: P) -> ConfigResult {
         // Validate before saving
         self.validate()?;
@@ -434,6 +438,60 @@ impl AudioConfig {
             return Err(ConfigError::InvalidValue(format!(
                 "max_audio_sources must be between 1 and 512, got {}",
                 self.max_audio_sources
+            )));
+        }
+
+        Ok(())
+    }
+}
+
+/// Network configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NetworkConfig {
+    pub player_name: String,
+    pub voice_chat_enabled: bool,
+    pub voice_chat_push_to_talk: bool,
+    pub push_to_talk_key: String,
+    pub max_players: u32,
+    pub server_port: u16,
+    pub tick_rate: f32,
+}
+
+impl Default for NetworkConfig {
+    fn default() -> Self {
+        Self {
+            player_name: "Driver".to_string(),
+            voice_chat_enabled: true,
+            voice_chat_push_to_talk: true,
+            push_to_talk_key: "ControlLeft".to_string(),
+            max_players: 32,
+            server_port: 27015,
+            tick_rate: 60.0,
+        }
+    }
+}
+
+impl NetworkConfig {
+    /// Validate network configuration values
+    pub fn validate(&self) -> ConfigResult {
+        if self.max_players == 0 || self.max_players > 128 {
+            return Err(ConfigError::InvalidValue(format!(
+                "max_players must be between 1 and 128, got {}",
+                self.max_players
+            )));
+        }
+
+        if self.server_port == 0 || self.server_port > 65535 {
+            return Err(ConfigError::InvalidValue(format!(
+                "server_port must be between 1 and 65535, got {}",
+                self.server_port
+            )));
+        }
+
+        if self.tick_rate <= 0.0 || self.tick_rate > 1000.0 {
+            return Err(ConfigError::InvalidValue(format!(
+                "tick_rate must be between 0.0 and 1000.0, got {}",
+                self.tick_rate
             )));
         }
 

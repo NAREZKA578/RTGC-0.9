@@ -7,7 +7,7 @@
 //! - Аэродинамическое сопротивление
 //! - Защита от NaN/Inf во всех вычислениях
 
-use nalgebra::{Matrix3, UnitQuaternion, Vector3};
+use nalgebra::Vector3;
 use std::f32::consts::PI;
 
 /// Advanced suspension model with non-linear spring and separate compression/rebound damping
@@ -180,7 +180,7 @@ impl AdvancedSuspension {
     }
 
     /// Update tire pressure based on temperature (ideal gas law approximation)
-    pub fn update_tire_pressure(&mut self, dt: f32) {
+    pub fn update_tire_pressure(&mut self, _dt: f32) {
         // P1/T1 = P2/T2 (Gay-Lussac's law)
         // Pressure increases ~1 PSI per 10°F (5.5°C) temperature rise
         let temp_kelvin = self.tire_temperature + 273.15;
@@ -367,9 +367,9 @@ impl AdvancedSuspension {
         &mut self,
         vehicle_velocity: Vector3<f32>,
         wheel_velocity: Vector3<f32>,
-        contact_normal: Vector3<f32>,
+        _contact_normal: Vector3<f32>,
         normal_force: f32,
-        dt: f32,
+        _dt: f32,
     ) -> (Vector3<f32>, Vector3<f32>) {
         // Calculate wheel's forward and lateral directions relative to vehicle
         let forward = Vector3::new(0.0, 0.0, 1.0); // Assuming wheel's forward direction
@@ -473,7 +473,7 @@ impl AdvancedWheel {
     pub fn update(
         &mut self,
         vehicle_velocity: Vector3<f32>,
-        vehicle_angular_velocity: Vector3<f32>,
+        __vehicle_angular_velocity: Vector3<f32>,
         wheel_linear_velocity: Vector3<f32>,
         contact_normal: Vector3<f32>,
         dt: f32,
@@ -518,7 +518,7 @@ impl AdvancedWheel {
     fn update_angular_velocity(
         &mut self,
         torque: f32,
-        lateral_force: Vector3<f32>,
+        _lateral_force: Vector3<f32>,
         normal_force: f32,
         dt: f32,
     ) {
@@ -646,7 +646,7 @@ impl AdvancedVehicle {
             }
 
             // Update wheel physics
-            let (wheel_force, normal_force) = wheel.update(
+            let (wheel_force, _normal_force) = wheel.update(
                 chassis_velocity,
                 chassis_angular_velocity,
                 wheel_linear_velocity,
@@ -667,7 +667,7 @@ impl AdvancedVehicle {
         self.update_engine_rpm(dt);
     }
 
-    fn update_engine_rpm(&mut self, dt: f32) {
+    fn update_engine_rpm(&mut self, _dt: f32) {
         // Simplified calculation based on average wheel angular velocity
         if !self.wheels.is_empty() {
             let avg_wheel_angular_velocity: f32 = self

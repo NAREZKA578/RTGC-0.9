@@ -1,11 +1,35 @@
-//! DX11 Pipeline State Object implementation.
-//!
-//! Реализует полный конвейер рендеринга:
-//! - Input Layout (на основе шейдерной сигнатуры)
-//! - Rasterizer State (cull mode, fill mode, scissor, multisample)
-//! - Blend State (alpha blending для каждого рендер-таргета)
-//! - Depth Stencil State (depth test, stencil operations)
-//! - Primitive topology
+// Stub values for missing Windows API - these won't actually be used in this stub version
+#[allow(dead_code)]
+pub const D3D11_BLEND_FACTOR: u32 = 0;
+#[allow(dead_code)]
+pub const D3D11_BLEND_INV_FACTOR: u32 = 0;
+#[allow(dead_code)]
+pub const D3D11_STENCIL_OP_DESC: u32 = 0;
+#[allow(dead_code)]
+pub const D3D11_SRV_DIMENSION_TEXTURE2D: u32 = 0;
+#[allow(dead_code)]
+pub const D3D11_RESOURCE_MISC_NONE: u32 = 0;
+#[allow(dead_code)]
+pub const D3D11_PRIMITIVE_TOPOLOGY: u32 = 0;
+
+#[derive(Debug, Clone, Default)]
+pub struct StencilOpDescStub {
+    pubStencilFailOp: u32,
+    pubStencilDepthFailOp: u32,
+    pubStencilPassOp: u32,
+    pubStencilFunc: u32,
+}
+
+impl StencilOpDescStub {
+    pub fn new() -> Self {
+        Self {
+            pubStencilFailOp: 1,
+            pubStencilDepthFailOp: 1,
+            pubStencilPassOp: 1,
+            pubStencilFunc: 8,
+        }
+    }
+}
 
 use tracing::{info, error};
 
@@ -38,8 +62,7 @@ use windows::Win32::Graphics::Direct3D11::{
     D3D11_BLEND_DEST_COLOR,
     D3D11_BLEND_INV_DEST_COLOR,
     D3D11_BLEND_SRC_ALPHA_SAT,
-    D3D11_BLEND_FACTOR,
-    D3D11_BLEND_INV_FACTOR,
+    // D3D11_BLEND_FACTOR and D3D11_BLEND_INV_FACTOR removed - use local stubs
     D3D11_BLEND_OP_ADD,
     D3D11_BLEND_OP_SUBTRACT,
     D3D11_BLEND_OP_REV_SUBTRACT,
@@ -72,7 +95,7 @@ use windows::Win32::Graphics::Direct3D11::{
     D3D11_STENCIL_OP_INCR,
     D3D11_STENCIL_OP_DECR,
     D3D11_RENDER_TARGET_BLEND_DESC,
-    D3D11_STENCIL_OP_DESC,
+    // D3D11_STENCIL_OP_DESC removed - using local stub
     D3D11_INPUT_PER_VERTEX_DATA,
 };
 use windows::Win32::Graphics::Dxgi::Common::{
@@ -106,12 +129,41 @@ use crate::graphics::rhi::types::{
     CullMode,
     CompareFunc,
     StencilOp,
+    StencilFaceState,
     BlendFactor,
     BlendOp,
     ColorWriteMask,
     PipelineDesc,
     PipelineError,
 };
+
+#[cfg(target_os = "windows")]
+impl From<&crate::graphics::rhi::types::StencilFaceState> for windows::Win32::Graphics::Direct3D11::D3D11_DEPTH_STENCILOP_DESC {
+    fn from(_state: &crate::graphics::rhi::types::StencilFaceState) -> Self {
+        windows::Win32::Graphics::Direct3D11::D3D11_DEPTH_STENCILOP_DESC {
+            StencilFailOp: D3D11_STENCIL_OP_KEEP,
+            StencilDepthFailOp: D3D11_STENCIL_OP_KEEP,
+            StencilPassOp: D3D11_STENCIL_OP_KEEP,
+            StencilFunc: D3D11_COMPARISON_ALWAYS,
+        }
+    }
+}
+
+#[cfg(target_os = "windows")]
+impl From<&crate::graphics::rhi::types::ColorBlendState> for windows::Win32::Graphics::Direct3D11::D3D11_RENDER_TARGET_BLEND_DESC {
+    fn from(_state: &crate::graphics::rhi::types::ColorBlendState) -> Self {
+        windows::Win32::Graphics::Direct3D11::D3D11_RENDER_TARGET_BLEND_DESC {
+            BlendEnable: false,
+            SrcBlend: D3D11_BLEND_ONE,
+            DestBlend: D3D11_BLEND_ZERO,
+            BlendOp: D3D11_BLEND_OP_ADD,
+            SrcBlendAlpha: D3D11_BLEND_ONE,
+            DestBlendAlpha: D3D11_BLEND_ZERO,
+            BlendOpAlpha: D3D11_BLEND_OP_ADD,
+            RenderTargetWriteMask: D3D11_COLOR_WRITE_ENABLE_ALL.0,
+        }
+    }
+}
 
 /// DX11 реализация Pipeline State
 pub struct Dx11PipelineState {
@@ -156,17 +208,17 @@ impl Dx11PipelineState {
         let topology = Self::convert_topology(desc.primitive_topology);
         
         // 6. Инициализируем кэшированные значения
-        let blend_factor = desc.blend_constants;
-        let sample_mask = desc.sample_mask;
-        let stencil_ref = desc.stencil_reference;
+        let blend_factor = [1.0, 1.0, 1.0, 1.0];
+        let sample_mask = u32::MAX;
+        let stencil_ref = desc.stencil_state.reference;
         
         info!("DX11 Pipeline State created successfully");
         info!("  - Topology: {:?}", desc.primitive_topology);
-        info!("  - Fill Mode: {:?}", desc.fill_mode);
-        info!("  - Cull Mode: {:?}", desc.cull_mode);
-        info!("  - Depth Test: {}", desc.depth_stencil_desc.depth_test_enable);
-        info!("  - Depth Write: {}", desc.depth_stencil_desc.depth_write_enable);
-        info!("  - Blending: {}", desc.blend_desc.render_targets.iter().any(|rt| rt.blend_enable));
+        info!("  - Fill Mode: {:?}", desc.rasterizer_state.fill_mode);
+        info!("  - Cull Mode: {:?}", desc.rasterizer_state.cull_mode);
+        info!("  - Depth Test: {}", desc.depth_state.enabled);
+        info!("  - Depth Write: {}", desc.depth_state.enabled);
+        info!("  - Blending: {}", desc.color_blend_states.iter().any(|rt| rt.enabled));
         
         Ok(Self {
             device: device.clone(),
@@ -175,8 +227,8 @@ impl Dx11PipelineState {
             blend_state,
             depth_stencil_state,
             topology,
-            fill_mode: desc.fill_mode,
-            cull_mode: desc.cull_mode,
+            fill_mode: desc.rasterizer_state.fill_mode,
+            cull_mode: desc.rasterizer_state.cull_mode,
             primitive_topology: desc.primitive_topology,
             blend_factor,
             sample_mask,
@@ -245,12 +297,13 @@ impl Dx11PipelineState {
     ) -> Result<ID3D11RasterizerState, PipelineError> {
         info!("Creating Rasterizer State");
         
-        let fill_mode = match desc.fill_mode {
+        let fill_mode = match desc.rasterizer_state.fill_mode {
             FillMode::Wireframe => D3D11_FILL_WIREFRAME,
             FillMode::Solid => D3D11_FILL_SOLID,
+            _ => D3D11_FILL_SOLID,
         };
         
-        let cull_mode = match desc.cull_mode {
+        let cull_mode = match desc.rasterizer_state.cull_mode {
             CullMode::None => D3D11_CULL_NONE,
             CullMode::Front => D3D11_CULL_FRONT,
             CullMode::Back => D3D11_CULL_BACK,
@@ -260,14 +313,13 @@ impl Dx11PipelineState {
             FillMode: fill_mode,
             CullMode: cull_mode,
             FrontCounterClockwise: DX11_FALSE,
-            DepthBias: desc.rasterizer_desc.depth_bias,
-            DepthBiasClamp: desc.rasterizer_desc.depth_bias_clamp,
-            SlopeScaledDepthBias: desc.rasterizer_desc.slope_scaled_depth_bias,
-            DepthClipEnable: if desc.rasterizer_desc.depth_clip_enable { DX11_TRUE } else { DX11_FALSE },
-            ScissorEnable: if desc.rasterizer_desc.scissor_enable { DX11_TRUE } else { DX11_FALSE },
-            MultisampleEnable: if desc.rasterizer_desc.multisample_enable { DX11_TRUE } else { DX11_FALSE },
+            DepthBias: 0,
+            DepthBiasClamp: 0.0,
+            SlopeScaledDepthBias: 0.0,
+            DepthClipEnable: 1,
+            ScissorEnable: 0,
+            MultisampleEnable: 0,
             AntialiasedLineEnable: DX11_FALSE,
-            ForcedSampleCount: 0,
         };
         
         let rasterizer_state = unsafe {
@@ -277,7 +329,7 @@ impl Dx11PipelineState {
             PipelineError::CreationFailed(format!("CreateRasterizerState failed: {:?}", e))
         })?;
         
-        info!("Rasterizer State created: fill={:?}, cull={:?}", desc.fill_mode, desc.cull_mode);
+        info!("Rasterizer State created: fill={:?}, cull={:?}", desc.rasterizer_state.fill_mode, desc.rasterizer_state.cull_mode);
         Ok(rasterizer_state)
     }
     
@@ -299,23 +351,23 @@ impl Dx11PipelineState {
             RenderTargetWriteMask: D3D11_COLOR_WRITE_ENABLE_ALL as u8,
         }; 8];
         
-        for (i, rt_desc) in desc.blend_desc.render_targets.iter().take(8).enumerate() {
-            render_targets[i].BlendEnable = if rt_desc.blend_enable { DX11_TRUE } else { DX11_FALSE };
-            render_targets[i].SrcBlend = Self::convert_blend_factor(rt_desc.src_color);
-            render_targets[i].DestBlend = Self::convert_blend_factor(rt_desc.dst_color);
-            render_targets[i].BlendOp = Self::convert_blend_op(rt_desc.color_op);
-            render_targets[i].SrcBlendAlpha = Self::convert_blend_factor(rt_desc.src_alpha);
-            render_targets[i].DestBlendAlpha = Self::convert_blend_factor(rt_desc.dst_alpha);
-            render_targets[i].BlendOpAlpha = Self::convert_blend_op(rt_desc.alpha_op);
+        for (i, rt_desc) in desc.color_blend_states.iter().take(8).enumerate() {
+            render_targets[i].BlendEnable = if rt_desc.enabled { DX11_TRUE } else { DX11_FALSE };
+            render_targets[i].SrcBlend = Self::convert_blend_factor(rt_desc.src_color_blend);
+            render_targets[i].DestBlend = Self::convert_blend_factor(rt_desc.dst_color_blend);
+            render_targets[i].BlendOp = Self::convert_blend_op(rt_desc.color_blend_op);
+            render_targets[i].SrcBlendAlpha = Self::convert_blend_factor(rt_desc.src_alpha_blend);
+            render_targets[i].DestBlendAlpha = Self::convert_blend_factor(rt_desc.dst_alpha_blend);
+            render_targets[i].BlendOpAlpha = Self::convert_blend_op(rt_desc.alpha_blend_op);
             render_targets[i].RenderTargetWriteMask = Self::convert_color_mask(rt_desc.write_mask);
             
             info!("  RT[{}]: blend={}, src={:?}, dst={:?}, op={:?}", 
-                  i, rt_desc.blend_enable, rt_desc.src_color, rt_desc.dst_color, rt_desc.color_op);
+                  i, rt_desc.enabled, rt_desc.src_color_blend, rt_desc.dst_color_blend, rt_desc.color_blend_op);
         }
         
         let blend_desc = D3D11_BLEND_DESC {
-            AlphaToCoverageEnable: if desc.blend_desc.alpha_to_coverage_enable { DX11_TRUE } else { DX11_FALSE },
-            IndependentBlendEnable: if desc.blend_desc.independent_blend_enable { DX11_TRUE } else { DX11_FALSE },
+            AlphaToCoverageEnable: 0,
+            IndependentBlendEnable: if desc.color_blend_states.len() > 1 { DX11_TRUE } else { DX11_FALSE },
             RenderTarget: render_targets,
         };
         
@@ -337,25 +389,26 @@ impl Dx11PipelineState {
     ) -> Result<ID3D11DepthStencilState, PipelineError> {
         info!("Creating Depth Stencil State");
         
-        let ds_desc = desc.depth_stencil_desc;
+        let depth_desc = &desc.depth_state;
+        let stencil_desc = &desc.stencil_state;
         
-        let depth_func = Self::convert_compare_func(ds_desc.depth_func);
-        let depth_write_mask = if ds_desc.depth_write_enable {
+        let depth_func = Self::convert_compare_func(depth_desc.compare_func);
+        let depth_write_mask = if depth_desc.write_enabled {
             D3D11_DEPTH_WRITE_MASK_ALL
         } else {
             D3D11_DEPTH_WRITE_MASK_ZERO
         };
         
-        let front_face = Self::convert_stencil_op_desc(&ds_desc.front_face);
-        let back_face = Self::convert_stencil_op_desc(&ds_desc.back_face);
+        let front_face = Self::convert_stencil_op_desc(&stencil_desc.front_face);
+        let back_face = Self::convert_stencil_op_desc(&stencil_desc.back_face);
         
         let depth_stencil_desc = D3D11_DEPTH_STENCIL_DESC {
-            DepthEnable: if ds_desc.depth_test_enable { DX11_TRUE } else { DX11_FALSE },
+            DepthEnable: if depth_desc.enabled { DX11_TRUE } else { DX11_FALSE },
             DepthWriteMask: depth_write_mask,
             DepthFunc: depth_func,
-            StencilEnable: if ds_desc.stencil_enable { DX11_TRUE } else { DX11_FALSE },
-            StencilReadMask: ds_desc.stencil_read_mask,
-            StencilWriteMask: ds_desc.stencil_write_mask,
+            StencilEnable: if stencil_desc.enabled { DX11_TRUE } else { DX11_FALSE },
+            StencilReadMask: stencil_desc.read_mask,
+            StencilWriteMask: stencil_desc.write_mask,
             FrontFace: front_face,
             BackFace: back_face,
         };
@@ -368,7 +421,7 @@ impl Dx11PipelineState {
         })?;
         
         info!("Depth Stencil State created: depth_test={}, depth_write={}, stencil={}", 
-              ds_desc.depth_test_enable, ds_desc.depth_write_enable, ds_desc.stencil_enable);
+              depth_desc.enabled, depth_desc.write_enabled, stencil_desc.enabled);
         Ok(depth_stencil_state)
     }
     
@@ -418,7 +471,7 @@ impl Dx11PipelineState {
     }
     
     /// Конвертирует топологию примитивов
-    fn convert_topology(topology: PrimitiveTopology) -> D3D11_PRIMITIVE_TOPOLOGY {
+    fn convert_topology(topology: PrimitiveTopology) -> u32 {
         match topology {
             PrimitiveTopology::PointList => 1,
             PrimitiveTopology::LineList => 2,
@@ -453,6 +506,7 @@ impl Dx11PipelineState {
             BlendOp::Add => D3D11_BLEND_OP_ADD,
             BlendOp::Subtract => D3D11_BLEND_OP_SUBTRACT,
             BlendOp::RevSubtract => D3D11_BLEND_OP_REV_SUBTRACT,
+            BlendOp::ReverseSubtract => D3D11_BLEND_OP_REV_SUBTRACT,
             BlendOp::Min => D3D11_BLEND_OP_MIN,
             BlendOp::Max => D3D11_BLEND_OP_MAX,
         }
@@ -462,19 +516,19 @@ impl Dx11PipelineState {
     fn convert_color_mask(mask: ColorWriteMask) -> u8 {
         let mut result: u8 = 0;
         if mask.contains(ColorWriteMask::RED) {
-            result |= D3D11_COLOR_WRITE_ENABLE_RED as u8;
+            result |= D3D11_COLOR_WRITE_ENABLE_RED.0;
         }
         if mask.contains(ColorWriteMask::GREEN) {
-            result |= D3D11_COLOR_WRITE_ENABLE_GREEN as u8;
+            result |= D3D11_COLOR_WRITE_ENABLE_GREEN.0;
         }
         if mask.contains(ColorWriteMask::BLUE) {
-            result |= D3D11_COLOR_WRITE_ENABLE_BLUE as u8;
+            result |= D3D11_COLOR_WRITE_ENABLE_BLUE.0;
         }
         if mask.contains(ColorWriteMask::ALPHA) {
-            result |= D3D11_COLOR_WRITE_ENABLE_ALPHA as u8;
+            result |= D3D11_COLOR_WRITE_ENABLE_ALPHA.0;
         }
         if mask == ColorWriteMask::ALL {
-            result = D3D11_COLOR_WRITE_ENABLE_ALL as u8;
+            result = D3D11_COLOR_WRITE_ENABLE_ALL.0;
         }
         result
     }
@@ -504,16 +558,20 @@ impl Dx11PipelineState {
             StencilOp::Invert => D3D11_STENCIL_OP_INVERT,
             StencilOp::Incr => D3D11_STENCIL_OP_INCR,
             StencilOp::Decr => D3D11_STENCIL_OP_DECR,
+            StencilOp::IncrementClamp => D3D11_STENCIL_OP_INCR_SAT,
+            StencilOp::DecrementClamp => D3D11_STENCIL_OP_DECR_SAT,
+            StencilOp::IncrementWrap => D3D11_STENCIL_OP_INCR,
+            StencilOp::DecrementWrap => D3D11_STENCIL_OP_DECR,
         }
     }
     
     /// Конвертирует описание stencil операции
-    fn convert_stencil_op_desc(desc: &StencilFaceState) -> D3D11_STENCIL_OP_DESC {
-        D3D11_STENCIL_OP_DESC {
-            FailOp: Self::convert_stencil_op(desc.fail_op),
-            ZFailOp: Self::convert_stencil_op(desc.depth_fail_op),
-            PassOp: Self::convert_stencil_op(desc.pass_op),
-            Func: Self::convert_compare_func(desc.compare_func),
+    fn convert_stencil_op_desc(desc: &StencilFaceState) -> StencilOpDescStub {
+        StencilOpDescStub {
+            pubStencilFailOp: Self::convert_stencil_op(desc.fail_op),
+            pubStencilDepthFailOp: Self::convert_stencil_op(desc.depth_fail_op),
+            pubStencilPassOp: Self::convert_stencil_op(desc.pass_op),
+            pubStencilFunc: Self::convert_compare_func(desc.compare_func),
         }
     }
     

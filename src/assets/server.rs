@@ -67,7 +67,7 @@ pub struct AssetServer {
     /// Кэш текстур
     textures: HashMap<AssetKey, LoadedTexture>,
     /// Кэш шрифтов (путь -> (размер -> LoadedFont))
-    fonts: HashMap<String, HashMap<f32, LoadedFont>>,
+    fonts: HashMap<String, HashMap<u32, LoadedFont>>,
     /// Базовый путь для ассетов
     base_path: String,
 }
@@ -112,16 +112,17 @@ impl AssetServer {
         
         // Создаём описание текстуры
         let desc = TextureDescription {
-            dimension: TextureDimension::D2,
             texture_type: TextureType::Texture2D,
+            format: TextureFormat::Rgba8Unorm,
             width: width as u32,
             height: height as u32,
             depth: 1,
-            depth_or_array_layers: 1,
-            format: TextureFormat::Rgba8Unorm,
+            mip_levels: 1,
+            array_size: 1,
             usage: TextureUsage::SHADER_READ | TextureUsage::TRANSFER_DST,
             initial_state: ResourceState::ShaderResource,
-            mip_levels: 1,
+            dimension: TextureDimension::D2,
+            depth_or_array_layers: 1,
         };
         
         // Создаём текстуру в RHI
@@ -144,7 +145,7 @@ impl AssetServer {
     }
     
     /// Загрузить шрифт
-    pub fn load_font(&mut self, path: &str, size: f32) -> Result<Arc<FontAtlas>, String> {
+    pub fn load_font(&mut self, path: &str, size: u32) -> Result<Arc<FontAtlas>, String> {
         // Проверяем кэш
         if let Some(fonts_by_size) = self.fonts.get(path) {
             if let Some(loaded) = fonts_by_size.get(&size) {
@@ -155,23 +156,24 @@ impl AssetServer {
         let full_path = self.get_full_path(path);
         
         // Загружаем шрифт
-        let mut atlas = FontAtlas::load_from_file(&full_path, size)?;
+        let mut atlas = FontAtlas::load_from_file(&full_path, size as f32)?;
         
         // Создаём текстуру для атласа глифов
         let (width, height) = atlas.get_atlas_dimensions();
         let atlas_data = atlas.get_atlas_data().to_vec();
         
         let desc = TextureDescription {
-            dimension: TextureDimension::D2,
             texture_type: TextureType::Texture2D,
+            format: TextureFormat::Rgba8Unorm,
             width,
             height,
             depth: 1,
-            depth_or_array_layers: 1,
-            format: TextureFormat::Rgba8Unorm,
+            mip_levels: 1,
+            array_size: 1,
             usage: TextureUsage::SHADER_READ | TextureUsage::TRANSFER_DST,
             initial_state: ResourceState::ShaderResource,
-            mip_levels: 1,
+            dimension: TextureDimension::D2,
+            depth_or_array_layers: 1,
         };
         
         let texture_handle = self.device.create_texture(&desc)
@@ -187,12 +189,13 @@ impl AssetServer {
         let arc_atlas = Arc::new(atlas);
         
         // Кэшируем
+        let size_key = size as u32;
         self.fonts
             .entry(path.to_string())
             .or_insert_with(HashMap::new)
-            .insert(size, LoadedFont {
+            .insert(size_key, LoadedFont {
                 atlas: arc_atlas.clone(),
-                size,
+                size: size as f32,
             });
         
         Ok(arc_atlas)
@@ -206,9 +209,10 @@ impl AssetServer {
     
     /// Получить шрифт из кэша
     pub fn get_font(&self, path: &str, size: f32) -> Option<Arc<FontAtlas>> {
+        let size_key = size as u32;
         self.fonts
             .get(path)
-            .and_then(|fonts| fonts.get(&size))
+            .and_then(|fonts| fonts.get(&size_key))
             .map(|f| f.atlas.clone())
     }
     

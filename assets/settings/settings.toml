@@ -8,6 +8,8 @@
 fullscreen = false
 vsync = true
 fps_limit = 60
+window_width = 1600
+window_height = 900
 resolution_width = 1920
 resolution_height = 1080
 brightness = 1.0

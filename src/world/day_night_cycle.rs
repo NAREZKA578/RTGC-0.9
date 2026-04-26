@@ -7,7 +7,7 @@
 //! - Lunar phases
 //! - Star field visibility
 
-use nalgebra::{Matrix4, UnitQuaternion, Vector3};
+use nalgebra::{Matrix4, Vector3};
 use std::f32::consts::PI;
 
 /// Celestial body type

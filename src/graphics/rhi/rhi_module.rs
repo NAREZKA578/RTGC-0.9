@@ -40,6 +40,9 @@ pub struct PipelineStateBuilder {
     vertex_shader: Option<ResourceHandle>,
     fragment_shader: Option<ResourceHandle>,
     compute_shader: Option<ResourceHandle>,
+    geometry_shader: Option<ResourceHandle>,
+    hull_shader: Option<ResourceHandle>,
+    domain_shader: Option<ResourceHandle>,
     input_layout: Option<InputLayout>,
     color_blend_states: Vec<ColorBlendState>,
     depth_state: DepthState,
@@ -47,6 +50,11 @@ pub struct PipelineStateBuilder {
     rasterizer_state: RasterizerState,
     primitive_topology: PrimitiveTopology,
     sample_count: u32,
+    sample_quality: u32,
+    num_render_targets: u32,
+    render_target_formats: [TextureFormat; 8],
+    depth_stencil_format: TextureFormat,
+    blend_state: ColorBlendState,
 }
 
 impl PipelineStateBuilder {
@@ -55,6 +63,9 @@ impl PipelineStateBuilder {
             vertex_shader: None,
             fragment_shader: None,
             compute_shader: None,
+            geometry_shader: None,
+            hull_shader: None,
+            domain_shader: None,
             input_layout: None,
             color_blend_states: Vec::new(),
             depth_state: DepthState::default(),
@@ -62,6 +73,11 @@ impl PipelineStateBuilder {
             rasterizer_state: RasterizerState::default(),
             primitive_topology: PrimitiveTopology::TriangleList,
             sample_count: 1,
+            sample_quality: 0,
+            num_render_targets: 1,
+            render_target_formats: [TextureFormat::Rgba8Unorm; 8],
+            depth_stencil_format: TextureFormat::Depth32Float,
+            blend_state: ColorBlendState::default(),
         }
     }
     
@@ -116,21 +132,34 @@ impl PipelineStateBuilder {
     }
     
     pub fn build(self) -> Result<PipelineStateObject, RhiError> {
+        let vs = self.vertex_shader.ok_or_else(|| {
+            RhiError::InvalidParameter("Vertex shader is required".to_string())
+        })?;
+        let fs = self.fragment_shader.ok_or_else(|| {
+            RhiError::InvalidParameter("Fragment shader is required".to_string())
+        })?;
+        let layout = self.input_layout.ok_or_else(|| {
+            RhiError::InvalidParameter("Input layout is required".to_string())
+        })?;
         Ok(PipelineStateObject {
-            vertex_shader: self.vertex_shader.ok_or_else(|| {
-                RhiError::InvalidParameter("Vertex shader is required".to_string())
-            })?,
-            fragment_shader: self.fragment_shader,
+            vertex_shader: vs,
+            fragment_shader: fs,
             compute_shader: self.compute_shader,
-            input_layout: self.input_layout.ok_or_else(|| {
-                RhiError::InvalidParameter("Input layout is required".to_string())
-            })?,
+            geometry_shader: self.geometry_shader,
+            hull_shader: self.hull_shader,
+            domain_shader: self.domain_shader,
+            input_layout: layout,
             color_blend_states: self.color_blend_states,
             depth_state: self.depth_state,
             stencil_state: self.stencil_state,
             rasterizer_state: self.rasterizer_state,
             primitive_topology: self.primitive_topology,
             sample_count: self.sample_count,
+            sample_quality: self.sample_quality,
+            num_render_targets: self.num_render_targets,
+            render_target_formats: self.render_target_formats,
+            depth_stencil_format: self.depth_stencil_format,
+            blend_state: self.blend_state,
         })
     }
 }
@@ -145,6 +174,8 @@ impl Default for PipelineStateBuilder {
 pub struct RenderPassBuilder {
     color_attachments: Vec<RenderAttachment>,
     depth_stencil_attachment: Option<DepthStencilAttachment>,
+    width: u32,
+    height: u32,
 }
 
 impl RenderPassBuilder {
@@ -152,6 +183,8 @@ impl RenderPassBuilder {
         Self {
             color_attachments: Vec::new(),
             depth_stencil_attachment: None,
+            width: 1920,
+            height: 1080,
         }
     }
     
@@ -165,10 +198,18 @@ impl RenderPassBuilder {
         self
     }
     
+    pub fn dimensions(mut self, width: u32, height: u32) -> Self {
+        self.width = width;
+        self.height = height;
+        self
+    }
+    
     pub fn build(self) -> RenderPassDescription {
         RenderPassDescription {
             color_attachments: self.color_attachments,
             depth_stencil_attachment: self.depth_stencil_attachment,
+            width: self.width,
+            height: self.height,
         }
     }
 }

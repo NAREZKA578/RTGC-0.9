@@ -1,10 +1,8 @@
 //! Player character structure and logic
 
-use crate::game::economy::PlayerWallet;
 use crate::game::save::{PlayerMoneyData, PlayerSkillsData};
 use crate::game::settings::CameraMode;
-use crate::game::skills::PlayerSkills;
-use crate::input::action_map::{ActionMap, ExtendedAction};
+
 use crate::network::protocol::PlayerInput;
 use nalgebra::{UnitQuaternion, Vector3};
 

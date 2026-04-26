@@ -10,7 +10,6 @@
 use nalgebra::Vector3;
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
-use tracing::{info, warn};
 use crate::world::chunk::ChunkData;
 
 /// Surface types affecting vehicle physics
@@ -224,7 +223,7 @@ impl PerlinNoise {
     #[inline]
     fn hash(&self, x: i32) -> u8 {
         let mask = 255;
-        self.permutations[(x as usize & mask)]
+        self.permutations[x as usize & mask]
     }
     
     /// Fractal Brownian Motion (multiple octaves of noise)

@@ -7,100 +7,100 @@
 //! - Поворот бортовыми фрикционами
 //! - Поддержка лебёдки
 
-use nalgebra::{Matrix3, Quaternion, UnitQuaternion, Vector3};
+use nalgebra::{Matrix3, UnitQuaternion, Vector3};
 use std::f32::consts::PI;
 
 use super::deformable_terrain::{DeformableTerrainComponent, DeformationType};
-use super::physics_module::{Ray, RaycastHit, RigidBody, LAYER_WORLD};
+use super::physics_module::{Ray, RaycastHit, RigidBody};
 use super::SurfaceType;
 
 /// Типы гусеничной техники
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TrackedVehicleType {
     /// ГТ-СМ — гусеничный тягач, лёгкий
-    GTS_M,
+    GtsM,
     /// ГАЗ-71 — армейский транспортер
-    GAZ_71,
+    Gaz71,
     /// МТ-ЛБ — многоцелевой бронетранспортер
-    MT_LB,
+    MtLb,
     /// Т-150К — тяжёлый трактор
-    T_150K,
+    T150k,
     /// ДТ-75 — сельскохозяйственный трактор
-    DT_75,
+    Dt75,
     /// Витязь ДТ-30 — сочленённый вездеход
-    Vityaz_DT30,
+    VityazDt30,
 }
 
 impl TrackedVehicleType {
     /// Получить массу пустого транспортного средства (кг)
     pub fn empty_mass(&self) -> f32 {
         match self {
-            TrackedVehicleType::GTS_M => 4500.0,
-            TrackedVehicleType::GAZ_71 => 3200.0,
-            TrackedVehicleType::MT_LB => 7200.0,
-            TrackedVehicleType::T_150K => 6800.0,
-            TrackedVehicleType::DT_75 => 4700.0,
-            TrackedVehicleType::Vityaz_DT30 => 12500.0,
+            TrackedVehicleType::GtsM => 4500.0,
+            TrackedVehicleType::Gaz71 => 3200.0,
+            TrackedVehicleType::MtLb => 7200.0,
+            TrackedVehicleType::T150k => 6800.0,
+            TrackedVehicleType::Dt75 => 4700.0,
+            TrackedVehicleType::VityazDt30 => 12500.0,
         }
     }
 
     /// Максимальная полезная нагрузка (кг)
     pub fn max_payload(&self) -> f32 {
         match self {
-            TrackedVehicleType::GTS_M => 2000.0,
-            TrackedVehicleType::GAZ_71 => 1000.0,
-            TrackedVehicleType::MT_LB => 2000.0,
-            TrackedVehicleType::T_150K => 3000.0,
-            TrackedVehicleType::DT_75 => 2500.0,
-            TrackedVehicleType::Vityaz_DT30 => 10000.0,
+            TrackedVehicleType::GtsM => 2000.0,
+            TrackedVehicleType::Gaz71 => 1000.0,
+            TrackedVehicleType::MtLb => 2000.0,
+            TrackedVehicleType::T150k => 3000.0,
+            TrackedVehicleType::Dt75 => 2500.0,
+            TrackedVehicleType::VityazDt30 => 10000.0,
         }
     }
 
     /// Мощность двигателя (л.с.)
     pub fn engine_horsepower(&self) -> f32 {
         match self {
-            TrackedVehicleType::GTS_M => 240.0,
-            TrackedVehicleType::GAZ_71 => 115.0,
-            TrackedVehicleType::MT_LB => 240.0,
-            TrackedVehicleType::T_150K => 180.0,
-            TrackedVehicleType::DT_75 => 75.0,
-            TrackedVehicleType::Vityaz_DT30 => 710.0,
+            TrackedVehicleType::GtsM => 240.0,
+            TrackedVehicleType::Gaz71 => 115.0,
+            TrackedVehicleType::MtLb => 240.0,
+            TrackedVehicleType::T150k => 180.0,
+            TrackedVehicleType::Dt75 => 75.0,
+            TrackedVehicleType::VityazDt30 => 710.0,
         }
     }
 
     /// Ширина гусеницы (м)
     pub fn track_width(&self) -> f32 {
         match self {
-            TrackedVehicleType::GTS_M => 0.50,
-            TrackedVehicleType::GAZ_71 => 0.36,
-            TrackedVehicleType::MT_LB => 0.35,
-            TrackedVehicleType::T_150K => 0.58,
-            TrackedVehicleType::DT_75 => 0.39,
-            TrackedVehicleType::Vityaz_DT30 => 0.80,
+            TrackedVehicleType::GtsM => 0.50,
+            TrackedVehicleType::Gaz71 => 0.36,
+            TrackedVehicleType::MtLb => 0.35,
+            TrackedVehicleType::T150k => 0.58,
+            TrackedVehicleType::Dt75 => 0.39,
+            TrackedVehicleType::VityazDt30 => 0.80,
         }
     }
 
     /// Длина опорной поверхности гусеницы (м)
     pub fn track_length(&self) -> f32 {
         match self {
-            TrackedVehicleType::GTS_M => 2.8,
-            TrackedVehicleType::GAZ_71 => 2.5,
-            TrackedVehicleType::MT_LB => 2.9,
-            TrackedVehicleType::T_150K => 2.6,
-            TrackedVehicleType::DT_75 => 2.4,
-            TrackedVehicleType::Vityaz_DT30 => 4.2,
+            TrackedVehicleType::GtsM => 2.8,
+            TrackedVehicleType::Gaz71 => 2.5,
+            TrackedVehicleType::MtLb => 2.9,
+            TrackedVehicleType::T150k => 2.6,
+            TrackedVehicleType::Dt75 => 2.4,
+            TrackedVehicleType::VityazDt30 => 4.2,
         }
     }
 
     /// Количество опорных катков на сторону
     pub fn road_wheel_count(&self) -> u32 {
         match self {
-            TrackedVehicleType::GTS_M => 5,
-            TrackedVehicleType::GAZ_71 => 4,
-            TrackedVehicleType::MT_LB => 6,
-            TrackedVehicleType::T_150K => 5,
-            TrackedVehicleType::DT_75 => 6,
-            TrackedVehicleType::Vityaz_DT30 => 7,
+            TrackedVehicleType::GtsM => 5,
+            TrackedVehicleType::Gaz71 => 4,
+            TrackedVehicleType::MtLb => 6,
+            TrackedVehicleType::T150k => 5,
+            TrackedVehicleType::Dt75 => 6,
+            TrackedVehicleType::VityazDt30 => 7,
         }
     }
 
@@ -116,24 +116,24 @@ impl TrackedVehicleType {
     /// Максимальная скорость по шоссе (км/ч)
     pub fn max_speed_kmh(&self) -> f32 {
         match self {
-            TrackedVehicleType::GTS_M => 50.0,
-            TrackedVehicleType::GAZ_71 => 60.0,
-            TrackedVehicleType::MT_LB => 60.0,
-            TrackedVehicleType::T_150K => 43.0,
-            TrackedVehicleType::DT_75 => 11.0,
-            TrackedVehicleType::Vityaz_DT30 => 50.0,
+            TrackedVehicleType::GtsM => 50.0,
+            TrackedVehicleType::Gaz71 => 60.0,
+            TrackedVehicleType::MtLb => 60.0,
+            TrackedVehicleType::T150k => 43.0,
+            TrackedVehicleType::Dt75 => 11.0,
+            TrackedVehicleType::VityazDt30 => 50.0,
         }
     }
 
     /// Запас хода по шоссе (км)
     pub fn range_km(&self) -> f32 {
         match self {
-            TrackedVehicleType::GTS_M => 500.0,
-            TrackedVehicleType::GAZ_71 => 600.0,
-            TrackedVehicleType::MT_LB => 500.0,
-            TrackedVehicleType::T_150K => 625.0,
-            TrackedVehicleType::DT_75 => 750.0,
-            TrackedVehicleType::Vityaz_DT30 => 500.0,
+            TrackedVehicleType::GtsM => 500.0,
+            TrackedVehicleType::Gaz71 => 600.0,
+            TrackedVehicleType::MtLb => 500.0,
+            TrackedVehicleType::T150k => 625.0,
+            TrackedVehicleType::Dt75 => 750.0,
+            TrackedVehicleType::VityazDt30 => 500.0,
         }
     }
 }
@@ -703,9 +703,9 @@ mod tests {
 
     #[test]
     fn test_gtsm_creation() {
-        let vehicle = TrackedVehicle::new(TrackedVehicleType::GTS_M, Vector3::new(0.0, 10.0, 0.0));
+        let vehicle = TrackedVehicle::new(TrackedVehicleType::GtsM, Vector3::new(0.0, 10.0, 0.0));
 
-        assert_eq!(vehicle.vehicle_type, TrackedVehicleType::GTS_M);
+        assert_eq!(vehicle.vehicle_type, TrackedVehicleType::GtsM);
         assert_eq!(vehicle.mass, 4500.0);
         assert!(vehicle.fuel > 0.0);
         assert!(!vehicle.engine_running);
@@ -713,7 +713,7 @@ mod tests {
 
     #[test]
     fn test_engine_start() {
-        let mut vehicle = TrackedVehicle::new(TrackedVehicleType::GAZ_71, Vector3::zeros());
+        let mut vehicle = TrackedVehicle::new(TrackedVehicleType::Gaz71, Vector3::zeros());
 
         assert!(vehicle.start_engine());
         assert!(vehicle.engine_running);
@@ -723,7 +723,7 @@ mod tests {
     #[test]
     fn test_ground_pressure() {
         // МТ-ЛБ должен иметь низкое удельное давление
-        let mt_lb = TrackedVehicleType::MT_LB;
+        let mt_lb = TrackedVehicleType::MtLb;
         let pressure = mt_lb.ground_pressure();
 
         // Должно быть около 0.2-0.5 кгс/см²

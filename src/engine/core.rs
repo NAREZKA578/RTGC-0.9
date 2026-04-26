@@ -8,13 +8,13 @@ use crate::engine::game_loop_manager::GameLoopManager;
 use crate::engine::input_manager::InputManagerWrapper;
 use crate::engine::physics_manager::PhysicsManager;
 use crate::engine::render_manager::RenderManager;
-use crate::engine::state::{EngineState, MenuState};
+use crate::engine::state::EngineState;
 use crate::engine::subsystems::EngineSubsystems;
 use crate::engine::vehicle_manager::VehicleManager;
 use crate::engine::world_manager::WorldManager;
 use crate::game::debug_menu::DebugMenu;
 use crate::game::interaction::InteractionSystem;
-use crate::game::loading_manager::{LoadingManager, LoadingStage, LoadingStateDetailed};
+use crate::game::loading_manager::LoadingManager;
 use crate::game::{MainMenu, MenuAction};
 use crate::graphics::material::MaterialManager;
 use crate::graphics::particles::ParticleSystem;
@@ -22,8 +22,8 @@ use crate::graphics::GraphicsContext;
 use crate::graphics::renderer::DebugRenderer;
 use crate::physics::set_global_physics_world;
 use crate::ui::HudManager;
-use nalgebra::{UnitQuaternion, Vector3};
-use raw_window_handle::HasWindowHandle;
+use nalgebra::Vector3;
+
 use std::sync::Arc;
 use std::time::Instant;
 use tracing::{error, info, warn};
@@ -84,10 +84,10 @@ impl Engine {
     pub fn new() -> Result<Self, Box<dyn std::error::Error>> {
         // Try to load config - check multiple possible locations
         let config_paths = [
-            std::path::Path::new("config.json"),
-            std::path::Path::new("..\\config.json"),
-            std::path::Path::new("..\\..\\config.json"),
-            std::path::Path::new("..\\..\\..\\config.json"),
+            std::path::Path::new("settings.toml"),
+            std::path::Path::new("assets\\settings\\settings.toml"),
+            std::path::Path::new("..\\settings.toml"),
+            std::path::Path::new("..\\assets\\settings\\settings.toml"),
         ];
 
         // Find first existing config file
@@ -113,14 +113,14 @@ impl Engine {
         // Графический контекст будет создан в resumed()
         let graphics_context: Option<GraphicsContext> = None;
 
-        // Создание подсистем
+// Создание подсистем
         let physics_world = crate::physics::PhysicsWorld::new();
         let subsystems = EngineSubsystems::new(
             crate::engine::subsystems::GraphicsSubsystem::new(
                 None,
                 MaterialManager::new(crate::graphics::material::TextureQuality::Medium),
                 ParticleSystem::new(1000),
-                DebugRenderer::new(),
+                crate::graphics::renderer::DebugRenderer::new(10000),
             ),
             crate::engine::subsystems::PhysicsSubsystem::new(physics_world),
             crate::input::InputManager::new(),
@@ -131,10 +131,10 @@ impl Engine {
                 crate::game::ui::UIManager::new(),
                 DebugMenu::new(),
             ),
-            crate::engine::subsystems::WorldSubsystem::new(crate::world::DayNightCycle::new(
-                55.0, 82.9,
-            )),
-            LoadingManager::new("assets"),
+            crate::engine::subsystems::WorldSubsystem::new(
+                crate::world::DayNightCycle::new(55.0, 82.9),
+            ),
+            LoadingManager::new(),
             crate::game::save::SaveSystem::default(),
         );
 
@@ -229,7 +229,7 @@ impl ApplicationHandler for GameApp<'_> {
         let window_arc = if backend.to_lowercase().as_str() == "dx11"
             || backend.to_lowercase().as_str() == "dx12"
         {
-            match event_loop.create_window(window_attrs) {
+            match event_loop.create_window(window_attrs.clone()) {
                 Ok(w) => Some(Arc::new(w)),
                 Err(e) => {
                     error!(target: "engine", "Failed to create window: {:?}", e);
@@ -547,7 +547,7 @@ impl Engine {
         if self.game_state.is_in_menu() {
             if let Some(ref mut rm) = self.render_manager {
                 let window_size = [rm.graphics_context().width() as f32, rm.graphics_context().height() as f32];
-                if let Some(action) = self.main_menu.update(dt, &self.input_manager) {
+                if let Some(action) = self.main_menu.update(dt, self.input_manager.input_manager()) {
                     self.handle_menu_action(action);
                 }
             }
@@ -624,12 +624,12 @@ impl Engine {
             }
         }
 
-        // Синхронизация физики с рендером: передача позиции транспорта в камеру
+// Синхронизация физики с рендером: передача позиции транспорта в камеру
         if let Some(vehicle) = self.physics_manager.get_vehicle() {
             let pos = vehicle.position();
             let rot = vehicle.rotation();
             if let Some(ref mut rm) = self.render_manager {
-                rm.set_vehicle_transform(pos, rot);
+                rm.set_vehicle_transform(pos, *rot);
                 rm.update_camera_from_vehicle(pos, *rot);
             }
         }
@@ -638,8 +638,9 @@ impl Engine {
         let hour = self.world_manager.get_current_hour();
         let sun_dir = self.world_manager.get_day_night_cycle().get_sun_direction();
         let sky_top = self.world_manager.get_day_night_cycle().get_sky_color_top();
+        let sky_bottom = self.world_manager.get_day_night_cycle().get_sky_color_horizon();
         if let Some(ref mut rm) = self.render_manager {
-            rm.set_sky_colors(sky_top, sky_top);
+            rm.set_sky_colors(sky_bottom, sky_top);
             rm.set_sun_direction(sun_dir);
         }
 
@@ -650,18 +651,20 @@ impl Engine {
             }
         }
 
-        // Обновление игрового цикла
+// Обновление игрового цикла
         let player_position = Some(self.vehicle_manager.get_player_position());
         let player_forward = self.vehicle_manager.get_player_forward();
         if let Err(e) =
             self.game_loop_manager
                 .update(dt, &self.game_state, player_position, player_forward)
         {
-            error!(target: "gameloop", "Game loop update error: {:?}", e);
+            warn!(target: "game", "Game loop update error: {:?}", e);
         }
 
-        // Обновление подсистем
-        self.subsystems.update(dt);
+        // Обновление подсистем (только если не на паузе)
+        if !self.game_state.is_paused() {
+            self.subsystems.update(dt);
+        }
 
         Ok(())
     }
@@ -692,18 +695,7 @@ impl Engine {
     fn initialize_game_world(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         info!(target: "engine", "Initializing game world...");
         
-        // Создание физического мира (если ещё не создан)
-        if self.subsystems.physics.physics_world.get().is_none() {
-            let physics_world = crate::physics::PhysicsWorld::new();
-            self.subsystems.physics.physics_world.set(physics_world);
-        }
-        
-        // Инициализация мира
-        if let Err(e) = self.world_manager.initialize_world() {
-            error!(target: "engine", "World initialization error: {:?}", e);
-        }
-        
-        // Спавн игрока/транспорта
+// Спавн игрока/транспорта
         let player_pos = nalgebra::Vector3::new(0.0, 10.0, 0.0);
         self.vehicle_manager.set_player_position(player_pos);
         

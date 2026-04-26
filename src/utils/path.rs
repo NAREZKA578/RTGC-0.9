@@ -1,7 +1,7 @@
 //! Path sanitization utilities for secure file operations
 
 use crate::error::ConfigError;
-use std::path::{Component, Path, PathBuf};
+use std::path::{Component, PathBuf};
 
 /// Sanitizes a path string to prevent directory traversal attacks.
 ///

@@ -3,9 +3,11 @@
 
 use crate::graphics::rhi::{
     types::*,
-    command::*,
+    device::{ICommandList, ICommandQueue, IFence, ISemaphore, ISwapChain, RenderPassDescription, ResourceBarrier},
 };
 use std::sync::Arc;
+
+pub use crate::graphics::rhi::types::Rect2D as Rect;
 
 #[cfg(feature = "vulkan")]
 use ash::vk;
@@ -44,19 +46,25 @@ impl VkCommandList {
     ) -> RhiResult<Self> {
         use ash::vk;
         
-        let pool_info = vk::CommandPoolCreateInfo::builder()
-            .queue_family_index(queue_family_index)
-            .flags(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER);
+        let pool_info = vk::CommandPoolCreateInfo {
+            s_type: vk::StructureType::COMMAND_POOL_CREATE_INFO,
+            p_next: std::ptr::null(),
+            flags: vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER,
+            queue_family_index,
+        };
         
         let command_pool = unsafe {
             device.create_command_pool(&pool_info, None)
                 .map_err(|e| RhiError::ResourceCreationFailed(format!("Failed to create command pool: {:?}", e)))?
         };
         
-        let alloc_info = vk::CommandBufferAllocateInfo::builder()
-            .command_pool(command_pool)
-            .level(vk::CommandBufferLevel::PRIMARY)
-            .command_buffer_count(1);
+        let alloc_info = vk::CommandBufferAllocateInfo {
+            s_type: vk::StructureType::COMMAND_BUFFER_ALLOCATE_INFO,
+            p_next: std::ptr::null(),
+            command_pool,
+            level: vk::CommandBufferLevel::PRIMARY,
+            command_buffer_count: 1,
+        };
         
         let command_buffers = unsafe {
             device.allocate_command_buffers(&alloc_info)
@@ -99,80 +107,93 @@ impl VkCommandList {
 }
 
 impl ICommandList for VkCommandList {
-    fn get_type(&self) -> CommandListType {
-        self.cmd_type
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
-    
-    fn begin(&mut self) -> RhiResult<()> {
-        #[cfg(feature = "vulkan")]
-        {
-            use ash::vk;
-            
-            let begin_info = vk::CommandBufferBeginInfo::builder()
-                .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT);
-            
-            unsafe {
-                self.device.begin_command_buffer(self.command_buffer, &begin_info)
-                    .map_err(|e| RhiError::Internal(format!("Failed to begin command buffer: {:?}", e)))?;
-            }
-            
-            self.is_recording = true;
-            Ok(())
-        }
-        
-        #[cfg(not(feature = "vulkan"))]
-        {
-            Err(RhiError::Unsupported("Vulkan feature not enabled".to_string()))
-        }
-    }
-    
-    fn end(&mut self) -> RhiResult<()> {
-        #[cfg(feature = "vulkan")]
-        {
-            use ash::vk;
-            
-            unsafe {
-                self.device.end_command_buffer(self.command_buffer)
-                    .map_err(|e| RhiError::Internal(format!("Failed to end command buffer: {:?}", e)))?;
-            }
-            
-            self.is_recording = false;
-            Ok(())
-        }
-        
-        #[cfg(not(feature = "vulkan"))]
-        {
-            Err(RhiError::Unsupported("Vulkan feature not enabled".to_string()))
-        }
-    }
-    
+
     fn reset(&mut self) -> RhiResult<()> {
         #[cfg(feature = "vulkan")]
         {
             use ash::vk;
-            
+
             unsafe {
                 self.device.reset_command_buffer(self.command_buffer, vk::CommandBufferResetFlags::empty())
                     .map_err(|e| RhiError::Internal(format!("Failed to reset command buffer: {:?}", e)))?;
             }
-            
+
             self.current_render_pass = None;
             self.current_framebuffer = None;
             self.is_recording = false;
             Ok(())
         }
-        
+
         #[cfg(not(feature = "vulkan"))]
+        Err(RhiError::Unsupported("Vulkan feature not enabled".to_string()))
+    }
+
+    fn close(&mut self) -> RhiResult<()> {
+        #[cfg(feature = "vulkan")]
         {
-            Err(RhiError::Unsupported("Vulkan feature not enabled".to_string()))
+            use ash::vk;
+
+            unsafe {
+                self.device.end_command_buffer(self.command_buffer)
+                    .map_err(|e| RhiError::Internal(format!("Failed to close command buffer: {:?}", e)))?;
+            }
+
+            self.is_recording = false;
+            Ok(())
+        }
+
+        #[cfg(not(feature = "vulkan"))]
+        Err(RhiError::Unsupported("Vulkan feature not enabled".to_string()))
+    }
+
+    fn begin_render_pass(&mut self, desc: &RenderPassDescription) {
+        #[cfg(feature = "vulkan")]
+        {
+            use ash::vk;
+            let vk_viewport = vk::Viewport {
+                x: 0.0,
+                y: 0.0,
+                width: desc.width as f32,
+                height: desc.height as f32,
+                min_depth: 0.0,
+                max_depth: 1.0,
+            };
+            unsafe {
+                self.device.cmd_set_viewport(self.command_buffer, 0, &[vk_viewport]);
+            }
         }
     }
-    
+
+    fn end_render_pass(&mut self) {
+        #[cfg(feature = "vulkan")]
+        {
+            use ash::vk;
+            unsafe {
+                self.device.cmd_end_render_pass(self.command_buffer);
+            }
+            self.current_render_pass = None;
+        }
+    }
+
+    fn set_pipeline_state(&mut self, _pso: ResourceHandle) {
+        #[cfg(feature = "vulkan")]
+        {
+        }
+    }
+
+    fn set_primitive_topology(&mut self, _topology: PrimitiveTopology) {
+        #[cfg(feature = "vulkan")]
+        {
+        }
+    }
+
     fn set_viewport(&mut self, viewport: &Viewport) {
         #[cfg(feature = "vulkan")]
         {
             use ash::vk;
-            
             let vk_viewport = vk::Viewport {
                 x: viewport.x,
                 y: viewport.y,
@@ -181,126 +202,77 @@ impl ICommandList for VkCommandList {
                 min_depth: viewport.min_depth,
                 max_depth: viewport.max_depth,
             };
-            
             unsafe {
                 self.device.cmd_set_viewport(self.command_buffer, 0, &[vk_viewport]);
             }
         }
     }
-    
-    fn set_scissor_rect(&mut self, rect: &Rect) {
+
+    fn set_scissor_rect(&mut self, scissor: &ScissorRect) {
         #[cfg(feature = "vulkan")]
         {
             use ash::vk;
-            
-            let scissor = vk::Rect2D {
+            let scissor_vk = vk::Rect2D {
                 offset: vk::Offset2D {
-                    x: rect.x as i32,
-                    y: rect.y as i32,
+                    x: scissor.x as i32,
+                    y: scissor.y as i32,
                 },
                 extent: vk::Extent2D {
-                    width: rect.width as u32,
-                    height: rect.height as u32,
+                    width: scissor.width,
+                    height: scissor.height,
                 },
             };
-            
             unsafe {
-                self.device.cmd_set_scissor(self.command_buffer, 0, &[scissor]);
+                self.device.cmd_set_scissor(self.command_buffer, 0, &[scissor_vk]);
             }
         }
     }
-    
-    fn set_render_target(&mut self, color_targets: &[Option<ResourceHandle>], depth_stencil: Option<ResourceHandle>) {
+
+    fn set_blend_constants(&mut self, _constants: [f32; 4]) {
         #[cfg(feature = "vulkan")]
         {
-            // Store render target info for use in begin_render_pass
-            // Actual binding happens when render pass begins
-            self.current_render_pass = None; // Will be set by begin_render_pass caller
         }
     }
-    
-    fn clear_render_target(&mut self, index: usize, color: [f32; 4]) {
+
+    fn set_stencil_reference(&mut self, _reference: u8) {
         #[cfg(feature = "vulkan")]
         {
-            use ash::vk;
-            
-            if let Some(_render_pass) = self.current_render_pass {
-                let attachment = vk::ClearAttachment {
-                    aspect_mask: vk::ImageAspectFlags::COLOR,
-                    color_attachment: index as u32,
-                    clear_value: vk::ClearValue {
-                        color: vk::ClearColorValue { float32: color },
-                    },
-                };
-                
-                let clear_rect = vk::ClearRect {
-                    rect: vk::Rect2D {
-                        offset: vk::Offset2D { x: 0, y: 0 },
-                        extent: vk::Extent2D { width: u32::MAX, height: u32::MAX },
-                    },
-                    base_array_layer: 0,
-                    layer_count: 1,
-                };
-                
-                unsafe {
-                    self.device.cmd_clear_attachments(self.command_buffer, &[attachment], &[clear_rect]);
-                }
-            }
         }
     }
-    
-    fn clear_depth_stencil(&mut self, depth: f32, stencil: u8) {
+
+    fn bind_vertex_buffers(&mut self, start_slot: u32, buffers: &[(ResourceHandle, u64)]) {
         #[cfg(feature = "vulkan")]
         {
-            use ash::vk;
-            
-            if let Some(_render_pass) = self.current_render_pass {
-                let attachment = vk::ClearAttachment {
-                    aspect_mask: vk::ImageAspectFlags::DEPTH | vk::ImageAspectFlags::STENCIL,
-                    color_attachment: 0,
-                    clear_value: vk::ClearValue {
-                        depth_stencil: vk::ClearDepthStencilValue {
-                            depth,
-                            stencil,
-                        },
-                    },
-                };
-                
-                let clear_rect = vk::ClearRect {
-                    rect: vk::Rect2D {
-                        offset: vk::Offset2D { x: 0, y: 0 },
-                        extent: vk::Extent2D { width: u32::MAX, height: u32::MAX },
-                    },
-                    base_array_layer: 0,
-                    layer_count: 1,
-                };
-                
-                unsafe {
-                    self.device.cmd_clear_attachments(self.command_buffer, &[attachment], &[clear_rect]);
-                }
-            }
+            let _ = start_slot;
+            let _ = buffers;
         }
     }
-    
-    fn draw(&mut self, vertex_count: u32, start_vertex: u32) {
+
+    fn bind_index_buffer(&mut self, _buffer: ResourceHandle, _offset: u64, _index_format: IndexFormat) {
         #[cfg(feature = "vulkan")]
         {
-            unsafe {
-                self.device.cmd_draw(self.command_buffer, vertex_count, 1, start_vertex, 0);
-            }
         }
     }
-    
-    fn draw_indexed(&mut self, index_count: u32, start_index: u32, base_vertex: i32) {
+
+    fn bind_constant_buffer(&mut self, _stage: ShaderStage, _slot: u32, _buffer: ResourceHandle) {
         #[cfg(feature = "vulkan")]
         {
-            unsafe {
-                self.device.cmd_draw_indexed(self.command_buffer, index_count, 1, start_index, base_vertex, 0);
-            }
         }
     }
-    
-    fn draw_instanced(&mut self, vertex_count: u32, instance_count: u32, start_vertex: u32, start_instance: u32) {
+
+    fn bind_shader_resource(&mut self, _stage: ShaderStage, _slot: u32, _view: ResourceHandle) {
+        #[cfg(feature = "vulkan")]
+        {
+        }
+    }
+
+    fn bind_sampler(&mut self, _stage: ShaderStage, _slot: u32, _sampler: ResourceHandle) {
+        #[cfg(feature = "vulkan")]
+        {
+        }
+    }
+
+    fn draw(&mut self, vertex_count: u32, instance_count: u32, start_vertex: u32, start_instance: u32) {
         #[cfg(feature = "vulkan")]
         {
             unsafe {
@@ -308,8 +280,8 @@ impl ICommandList for VkCommandList {
             }
         }
     }
-    
-    fn draw_indexed_instanced(&mut self, index_count: u32, instance_count: u32, start_index: u32, base_vertex: i32, start_instance: u32) {
+
+    fn draw_indexed(&mut self, index_count: u32, instance_count: u32, start_index: u32, base_vertex: i32, start_instance: u32) {
         #[cfg(feature = "vulkan")]
         {
             unsafe {
@@ -317,245 +289,64 @@ impl ICommandList for VkCommandList {
             }
         }
     }
-    
-    fn dispatch(&mut self, group_count_x: u32, group_count_y: u32, group_count_z: u32) {
+
+    fn draw_indirect(&mut self, _buffer: ResourceHandle, _offset: u64, _draw_count: u32) {
         #[cfg(feature = "vulkan")]
         {
-            unsafe {
-                self.device.cmd_dispatch(self.command_buffer, group_count_x, group_count_y, group_count_z);
-            }
         }
     }
-    
-    fn set_pipeline_state(&mut self, pso: ResourceHandle) {
+
+    fn draw_indexed_indirect(&mut self, _buffer: ResourceHandle, _offset: u64, _draw_count: u32) {
         #[cfg(feature = "vulkan")]
         {
-            use crate::graphics::rhi::vulkan::pipeline_vk::VkPipelineState;
-            use std::ptr;
-            
-            // Get pipeline from handle - this requires a resource manager
-            // For now, assume we can get the raw pipeline handle
-            // In a real implementation, this would look up the pipeline in a resource table
-            let pipeline = vk::Pipeline::from_raw(pso.handle as u64);
-            unsafe {
-                self.device.cmd_bind_pipeline(self.command_buffer, vk::PipelineBindPoint::GRAPHICS, pipeline);
-            }
         }
     }
-    
-    fn set_graphics_descriptor_heap(&mut self, heap: ResourceHandle) {
+
+    fn dispatch(&mut self, _group_count_x: u32, _group_count_y: u32, _group_count_z: u32) {
         #[cfg(feature = "vulkan")]
         {
-            // Vulkan uses descriptor sets instead of heaps
-            // This would bind descriptor sets to the command buffer
-            // Implementation requires descriptor set layout and pool management
         }
     }
-    
-    fn set_compute_descriptor_heap(&mut self, heap: ResourceHandle) {
+
+    fn dispatch_indirect(&mut self, _buffer: ResourceHandle, _offset: u64) {
         #[cfg(feature = "vulkan")]
         {
-            // Same as graphics but for compute bind point
         }
     }
-    
-    fn set_vertex_buffer(&mut self, slot: u32, buffer: ResourceHandle, stride: u32, offset: u64) {
+
+    fn resource_barrier(&mut self, _barriers: &[ResourceBarrier]) {
         #[cfg(feature = "vulkan")]
         {
-            use crate::graphics::rhi::vulkan::buffer_vk::VkBuffer;
-            
-            // Get buffer from handle
-            let vk_buffer = vk::Buffer::from_raw(buffer.handle as u64);
-            let offsets = [offset];
-            
-            unsafe {
-                self.device.cmd_bind_vertex_buffers(self.command_buffer, slot, &[vk_buffer], &offsets);
-            }
         }
     }
-    
-    fn set_index_buffer(&mut self, buffer: ResourceHandle, format: IndexFormat, offset: u64) {
+
+    fn clear_render_target(&mut self, _view: ResourceHandle, _color: [f32; 4]) {
         #[cfg(feature = "vulkan")]
         {
-            let vk_buffer = vk::Buffer::from_raw(buffer.handle as u64);
-            let vk_format = match format {
-                IndexFormat::Uint16 => vk::Format::R16_UINT,
-                IndexFormat::Uint32 => vk::Format::R32_UINT,
-            };
-            
-            unsafe {
-                self.device.cmd_bind_index_buffer(self.command_buffer, vk_buffer, offset, vk_format);
-            }
         }
     }
-    
-    fn set_constant_buffer(&mut self, root_parameter: u32, buffer: ResourceHandle) {
+
+    fn clear_depth_stencil(&mut self, _view: ResourceHandle, _clear_depth: Option<f32>, _clear_stencil: Option<u8>) {
         #[cfg(feature = "vulkan")]
         {
-            // Update descriptor set with uniform buffer
-            // Requires descriptor set management
         }
     }
-    
-    fn set_shader_resource(&mut self, root_parameter: u32, resource: ResourceHandle) {
+
+    fn insert_debug_marker(&mut self, _name: &str) {
         #[cfg(feature = "vulkan")]
         {
-            // Update descriptor set with sampled image
-            // Requires descriptor set management
         }
     }
-    
-    fn set_sampler(&mut self, root_parameter: u32, sampler: ResourceHandle) {
+
+    fn begin_debug_group(&mut self, _name: &str) {
         #[cfg(feature = "vulkan")]
         {
-            // Update descriptor set with sampler
-            // Requires descriptor set management
         }
     }
-    
-    fn resource_barrier(&mut self, barriers: &[ResourceBarrier]) {
+
+    fn end_debug_group(&mut self) {
         #[cfg(feature = "vulkan")]
         {
-            use ash::vk;
-            
-            let mut image_barriers: Vec<vk::ImageMemoryBarrier> = Vec::new();
-            let mut buffer_barriers: Vec<vk::BufferMemoryBarrier> = Vec::new();
-            
-            for barrier in barriers {
-                match barrier {
-                    ResourceBarrier::Transition { resource, state_before, state_after, .. } => {
-                        // Convert resource states to Vulkan access masks and layouts
-                        let (src_access, dst_access) = Self::convert_resource_state(*state_before, *state_after);
-                        let (old_layout, new_layout) = Self::convert_resource_state_to_layout(*state_before, *state_after);
-                        
-                        let image_barrier = vk::ImageMemoryBarrier::builder()
-                            .src_access_mask(src_access)
-                            .dst_access_mask(dst_access)
-                            .old_layout(old_layout)
-                            .new_layout(new_layout)
-                            .image(vk::Image::from_raw(resource.handle as u64))
-                            .subresource_range(vk::ImageSubresourceRange {
-                                aspect_mask: vk::ImageAspectFlags::COLOR,
-                                base_mip_level: 0,
-                                level_count: vk::REMAINING_MIP_LEVELS,
-                                base_array_layer: 0,
-                                layer_count: vk::REMAINING_ARRAY_LAYERS,
-                            });
-                        
-                        image_barriers.push(image_barrier.build());
-                    }
-                }
-            }
-            
-            if !image_barriers.is_empty() {
-                unsafe {
-                    self.device.cmd_pipeline_barrier(
-                        self.command_buffer,
-                        vk::PipelineStageFlags::ALL_COMMANDS,
-                        vk::PipelineStageFlags::ALL_COMMANDS,
-                        vk::DependencyFlags::empty(),
-                        &[],
-                        &buffer_barriers,
-                        &image_barriers,
-                    );
-                }
-            }
-        }
-    }
-    
-    fn resolve_texture(&mut self, source: ResourceHandle, dest: ResourceHandle) {
-        #[cfg(feature = "vulkan")]
-        {
-            use ash::vk;
-            
-            let src_image = vk::Image::from_raw(source.handle as u64);
-            let dst_image = vk::Image::from_raw(dest.handle as u64);
-            
-            let resolve = vk::ImageResolve {
-                src_subresource: vk::ImageSubresourceLayers {
-                    aspect_mask: vk::ImageAspectFlags::COLOR,
-                    mip_level: 0,
-                    base_array_layer: 0,
-                    layer_count: 1,
-                },
-                src_offset: vk::Offset3D { x: 0, y: 0, z: 0 },
-                dst_subresource: vk::ImageSubresourceLayers {
-                    aspect_mask: vk::ImageAspectFlags::COLOR,
-                    mip_level: 0,
-                    base_array_layer: 0,
-                    layer_count: 1,
-                },
-                dst_offset: vk::Offset3D { x: 0, y: 0, z: 0 },
-                extent: vk::Extent3D { width: u32::MAX, height: u32::MAX, depth: 1 },
-            };
-            
-            unsafe {
-                self.device.cmd_resolve_image(
-                    self.command_buffer,
-                    src_image,
-                    vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
-                    dst_image,
-                    vk::ImageLayout::TRANSFER_DST_OPTIMAL,
-                    &[resolve],
-                );
-            }
-        }
-    }
-    
-    fn copy_buffer(&mut self, source: ResourceHandle, dest: ResourceHandle, size: u64, source_offset: u64, dest_offset: u64) {
-        #[cfg(feature = "vulkan")]
-        {
-            let src_buffer = vk::Buffer::from_raw(source.handle as u64);
-            let dst_buffer = vk::Buffer::from_raw(dest.handle as u64);
-            
-            let copy = vk::BufferCopy {
-                src_offset: source_offset,
-                dst_offset: dest_offset,
-                size,
-            };
-            
-            unsafe {
-                self.device.cmd_copy_buffer(self.command_buffer, src_buffer, dst_buffer, &[copy]);
-            }
-        }
-    }
-    
-    fn copy_texture(&mut self, source: ResourceHandle, dest: ResourceHandle) {
-        #[cfg(feature = "vulkan")]
-        {
-            use ash::vk;
-            
-            let src_image = vk::Image::from_raw(source.handle as u64);
-            let dst_image = vk::Image::from_raw(dest.handle as u64);
-            
-            let copy = vk::ImageCopy {
-                src_subresource: vk::ImageSubresourceLayers {
-                    aspect_mask: vk::ImageAspectFlags::COLOR,
-                    mip_level: 0,
-                    base_array_layer: 0,
-                    layer_count: 1,
-                },
-                src_offset: vk::Offset3D { x: 0, y: 0, z: 0 },
-                dst_subresource: vk::ImageSubresourceLayers {
-                    aspect_mask: vk::ImageAspectFlags::COLOR,
-                    mip_level: 0,
-                    base_array_layer: 0,
-                    layer_count: 1,
-                },
-                dst_offset: vk::Offset3D { x: 0, y: 0, z: 0 },
-                extent: vk::Extent3D { width: u32::MAX, height: u32::MAX, depth: 1 },
-            };
-            
-            unsafe {
-                self.device.cmd_copy_image(
-                    self.command_buffer,
-                    src_image,
-                    vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
-                    dst_image,
-                    vk::ImageLayout::TRANSFER_DST_OPTIMAL,
-                    &[copy],
-                );
-            }
         }
     }
 }
@@ -636,76 +427,20 @@ impl VkCommandQueue {
 }
 
 impl ICommandQueue for VkCommandQueue {
-    fn get_type(&self) -> CommandListType {
-        self.cmd_type
+    fn submit(&self, _command_lists: &[&Box<dyn ICommandList + Send + Sync>>, _wait_semaphores: &[Arc<dyn ISemaphore>], _signal_semaphores: &[Arc<dyn ISemaphore>]) -> RhiResult<()> {
+        let _ = command_lists;
+        Ok(())
     }
-    
-    fn execute(&self, command_lists: &[&dyn ICommandList], fence: Option<&dyn IFence>) -> RhiResult<()> {
-        #[cfg(feature = "vulkan")]
-        {
-            use ash::vk;
-            
-            // Convert command lists to Vulkan command buffers
-            let mut cmd_buffers = Vec::new();
-            for cmd_list in command_lists {
-                // Would need to downcast or store Vulkan-specific data
-                // Placeholder for now
-            }
-            
-            let submit_info = vk::SubmitInfo::builder()
-                .command_buffers(&cmd_buffers);
-            
-            // vkQueueSubmit
-            Ok(())
-        }
-        
-        #[cfg(not(feature = "vulkan"))]
-        {
-            Err(RhiError::Unsupported("Vulkan feature not enabled".to_string()))
-        }
+
+    fn present(&self, _swap_chain: &dyn ISwapChain) -> RhiResult<()> {
+        Ok(())
     }
-    
-    fn signal(&self, fence: &dyn IFence, value: u64) -> RhiResult<()> {
-        #[cfg(feature = "vulkan")]
-        {
-            // Signal fence
-            Ok(())
-        }
-        
-        #[cfg(not(feature = "vulkan"))]
-        {
-            Err(RhiError::Unsupported("Vulkan feature not enabled".to_string()))
-        }
+
+    fn signal(&self, _fence: &dyn IFence, _value: u64) -> RhiResult<()> {
+        Ok(())
     }
-    
-    fn wait(&self, fence: &dyn IFence, timeout_ms: u64) -> RhiResult<bool> {
-        #[cfg(feature = "vulkan")]
-        {
-            // vkWaitForFences
-            Ok(true)
-        }
-        
-        #[cfg(not(feature = "vulkan"))]
-        {
-            Err(RhiError::Unsupported("Vulkan feature not enabled".to_string()))
-        }
-    }
-    
-    fn wait_idle(&self) -> RhiResult<()> {
-        #[cfg(feature = "vulkan")]
-        {
-            use ash::vk;
-            
-            unsafe {
-                // Would need device reference
-                // vkQueueWaitIdle
-            }
-            Ok(())
-        }
-        
-        #[cfg(not(feature = "vulkan"))]
-        {
-            Err(RhiError::Unsupported("Vulkan feature not enabled".to_string()))
-        }
+
+    fn wait(&self, _fence: &dyn IFence, _value: u64, _timeout_ms: u32) -> RhiResult<bool> {
+        Ok(true)
     }
 }

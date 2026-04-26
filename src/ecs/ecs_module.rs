@@ -186,15 +186,26 @@ impl<T: Component> ConcreteComponentStorage<T> {
         items.into_iter()
     }
 
-    // Безопасная мутабельная итерация через безопасный метод get_mut
+    // Безопасная мутабельная итерация
     pub fn iter_mut(&mut self) -> impl Iterator<Item = (usize, &mut T)> {
-        // Используем unsafe для обхода проверки времени жизни
-        // SAFETY: Мы гарантируем что данные не будут изменены во время итерации
-        let indices = self.dense_indices.clone();
+        let indices: Vec<usize> = self.dense_indices.iter().copied().collect();
         let data_ptr = self.data.as_mut_ptr();
-        indices.into_iter().filter_map(move |idx| unsafe {
-            let opt = &mut *data_ptr.add(idx);
-            opt.as_mut().map(|component| (idx, component))
+        let len = self.data.len();
+        
+        indices.into_iter().filter_map(move |idx| {
+            if idx < len {
+                unsafe {
+                    let opt = &mut (*data_ptr.add(idx));
+                    if opt.is_some() {
+                        let value_ptr: *mut T = opt as *mut Option<T> as *mut T;
+                        Some((idx, &mut *value_ptr))
+                    } else {
+                        None
+                    }
+                }
+            } else {
+                None
+            }
         })
     }
 }
@@ -450,8 +461,11 @@ impl EcsManager {
         concrete_storage.get(entity.index()).cloned()
     }
 
-    // Получение компонента (mutable)
-    // Используем безопасный подход с разделением заимствований
+    /// Получение компонента (mutable) - возвращаем &mut T через unsafe с документацией
+    /// Это безопасно потому что:
+    /// 1. Мы валидируем entity_index перед доступом
+    /// 2. У нас есть эксклюзивный доступ к self (&mut self)
+    /// 3. Мы проверяем что сущность жива
     pub fn get_component_mut<T: Component>(&mut self, entity: Entity) -> Option<&mut T> {
         if entity.is_null() || entity.index() >= self.entities.read().len() {
             return None;
@@ -474,15 +488,13 @@ impl EcsManager {
             .as_any_mut()
             .downcast_mut::<ConcreteComponentStorage<T>>()?;
 
-        // SAFETY: We obtain a raw pointer from the storage and return a reference with
-        // the lifetime of self. This is safe because:
-        // 1. The storage is part of self and will outlive the returned reference
-        // 2. The entity_index was validated to be within bounds
-        // 3. We have exclusive mutable access to self, ensuring no aliasing
-        // The transmute is used only to bypass Rust's lifetime checker which cannot
-        // verify that the reference is tied to self's lifetime through the index lookup.
+        // SAFETY: 
+        // - entity_index валидирован выше
+        // - у нас есть &mut self, дающий эксклюзивный доступ
+        // - guard живёт до конца этой функции
+        // - компонент не может быть удалён пока у нас &mut self
         let ptr = concrete_storage.get_mut(entity_index)?;
-        Some(unsafe { std::mem::transmute::<&mut T, &mut T>(ptr) })
+        unsafe { Some(&mut *(ptr as *mut T)) }
     }
 
     // Удаление компонента

@@ -23,7 +23,7 @@
 //! heli.update(0.016); // dt = 16ms
 //! ```
 
-use nalgebra::{Matrix3, Point3, Quaternion, UnitQuaternion, Vector3};
+use nalgebra::{Matrix3, Point3, UnitQuaternion, Vector3};
 use std::f32::consts::PI;
 use std::sync::Arc;
 
@@ -197,7 +197,7 @@ impl HelicopterConfig {
     pub fn custom(mass: f32, main_rotor_radius: f32, blade_count: u32, engine_power: f32) -> Self {
         // Автоматический расчёт параметров на основе основных характеристик
         let rotor_disk_area = PI * main_rotor_radius * main_rotor_radius;
-        let disk_loading = mass / rotor_disk_area;
+        let _disk_loading = mass / rotor_disk_area;
 
         Self {
             mass_empty: mass * 0.6,
@@ -327,7 +327,7 @@ impl MainRotor {
         let dr = self.radius / num_elements as f32;
 
         let mut total_thrust = 0.0;
-        let mut total_torque = 0.0;
+        let mut _total_torque = 0.0;
 
         for i in 0..num_elements {
             let r = (i as f32 + 0.5) * dr; // Радиус элемента
@@ -355,18 +355,18 @@ impl MainRotor {
 
             // Подъёмная сила элемента лопасти
             let dynamic_pressure = 0.5 * air_density * resultant_vel * resultant_vel;
-            let dL = dynamic_pressure * cl * self.chord_length * dr;
+            let d_l = dynamic_pressure * cl * self.chord_length * dr;
 
             // Учёт циклического шага (азимутальное усреднение)
             let azimuthal_factor = 1.0
                 + 0.3 * (self.cyclic_pitch_longitudinal.abs() + self.cyclic_pitch_lateral.abs());
 
-            total_thrust += dL * azimuthal_factor * self.blade_count as f32;
+            total_thrust += d_l * azimuthal_factor * self.blade_count as f32;
 
             // Индуктивное сопротивление
             let cd = 0.01 + cl * cl / (PI * self.blade_count as f32); // Упрощённая модель
-            let dD = dynamic_pressure * cd * self.chord_length * dr;
-            total_torque += dD * r * self.blade_count as f32;
+            let d_d = dynamic_pressure * cd * self.chord_length * dr;
+            _total_torque += d_d * r * self.blade_count as f32;
         }
 
         // Применяем фактор потерь на концах
@@ -393,7 +393,7 @@ impl MainRotor {
 
         let num_elements = 20;
         let dr = self.radius / num_elements as f32;
-        let mut total_torque = 0.0;
+        let mut _total_torque = 0.0;
 
         for i in 0..num_elements {
             let r = (i as f32 + 0.5) * dr;
@@ -415,12 +415,12 @@ impl MainRotor {
 
             let dynamic_pressure = 0.5 * air_density * resultant_vel * resultant_vel;
             let cd = 0.01 + cl * cl / (PI * self.blade_count as f32);
-            let dD = dynamic_pressure * cd * self.chord_length * dr;
+            let d_d = dynamic_pressure * cd * self.chord_length * dr;
 
-            total_torque += dD * r * self.blade_count as f32;
+            _total_torque += d_d * r * self.blade_count as f32;
         }
 
-        total_torque * self.tip_loss_factor
+        _total_torque * self.tip_loss_factor
     }
 
     /// Обновление скорости вращения ротора
@@ -472,7 +472,7 @@ impl TailRotor {
     }
 
     /// Расчёт боковой тяги хвостового ротора
-    pub fn calculate_thrust(&self, air_density: f32, main_rotor_torque: f32) -> Vector3<f32> {
+    pub fn calculate_thrust(&self, air_density: f32, _main_rotor_torque: f32) -> Vector3<f32> {
         let omega = self.current_rpm * 2.0 * PI / 60.0;
         let tip_speed = omega * self.radius;
 
@@ -702,6 +702,7 @@ impl HelicopterControls {
 pub struct Helicopter {
     // Основные параметры
     pub mass: f32,                      // Масса (кг)
+    pub main_rotor_radius: f32,           // Радиус главного ротора
     pub inertia_tensor: Matrix3<f32>,   // Тензор инерции
     pub position: Vector3<f32>,         // Позиция в мире
     pub rotation: UnitQuaternion<f32>,  // Ориентация
@@ -750,17 +751,19 @@ impl Helicopter {
     pub fn new(position: Vector3<f32>) -> Self {
         // Параметры для лёгкого вертолёта типа Robinson R44
         let mass = 1100.0; // кг
+        let main_rotor_radius = 5.0;
         let inertia_tensor = Matrix3::new(
             1500.0, 0.0, 0.0, // Ixx
             0.0, 2000.0, 0.0, // Iyy
             0.0, 0.0, 2500.0, // Izz
         );
 
-        let main_rotor = MainRotor::new(5.0, 2); // Радиус 5м, 2 лопасти
+        let main_rotor = MainRotor::new(main_rotor_radius, 2); // Радиус 5м, 2 лопасти
         let tail_rotor = TailRotor::new(0.8, Vector3::new(0.0, 0.0, -6.0)); // 6м от ЦМ
 
         Self {
             mass,
+            main_rotor_radius,
             inertia_tensor,
             position,
             rotation: UnitQuaternion::identity(),
@@ -841,6 +844,7 @@ impl Helicopter {
 
         Self {
             mass: total_mass,
+            main_rotor_radius: config.main_rotor_radius,
             inertia_tensor,
             position,
             rotation: UnitQuaternion::identity(),
@@ -1207,7 +1211,7 @@ impl Helicopter {
             return Vector3::zeros();
         }
 
-        let speed = speed_squared.sqrt();
+        let _speed = speed_squared.sqrt();
         let direction = -relative_velocity.normalize();
 
         // Сопротивление по разным осям

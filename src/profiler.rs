@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::time::Instant;
-use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
+use std::sync::atomic::AtomicUsize;
 
 // DEBUG: Отладка экспортов profiler - добавлено в Profiler::new()
 
@@ -253,13 +253,17 @@ impl Profiler {
     }
 }
 
-// Lazy initialization - use std::sync::OnceLock instead of once_cell
-use std::sync::{Mutex, OnceLock};
+use std::sync::LazyLock;
 
-pub static PROFILER: OnceLock<Mutex<Profiler>> = OnceLock::new();
+// Lazy initialization - используем parking_lot::Mutex который игнорирует отравление
+use parking_lot::Mutex;
 
-fn get_profiler() -> &'static Mutex<Profiler> {
-    PROFILER.get_or_init(|| Mutex::new(Profiler::new()))
+static PROFILER: LazyLock<Mutex<Profiler>> = LazyLock::new(|| {
+    Mutex::new(Profiler::new())
+});
+
+fn get_profiler() -> &'static LazyLock<Mutex<Profiler>> {
+    &PROFILER
 }
 
 #[macro_export]
@@ -275,58 +279,40 @@ pub struct ProfileGuard<'a> {
 }
 
 impl<'a> ProfileGuard<'a> {
-    pub fn new(name: &'a str) -> Self {
-        if let Ok(mut profiler) = get_profiler().lock() {
-            profiler.start_timer(name);
-        } else {
-            tracing::error!(target: "profiler", "Failed to acquire profiler lock for start_timer: {}", name);
-        }
+    pub fn new(name: &'static str) -> Self {
+        get_profiler().lock().start_timer(name);
         Self { name }
     }
 }
 
 impl<'a> Drop for ProfileGuard<'a> {
     fn drop(&mut self) {
-        match get_profiler().lock() {
-            Ok(mut profiler) => {
-                profiler.stop_timer(self.name);
-            }
-            Err(e) => {
-                // Log error instead of silent fail - important for debugging deadlocks
-                tracing::error!(target: "profiler", "Failed to acquire profiler lock in Drop for '{}': {}. Profiling data may be lost.", self.name, e);
-            }
-        }
+        get_profiler().lock().stop_timer(self.name);
     }
 }
 
 pub fn start_timer(name: &str) {
-    if let Ok(mut profiler) = get_profiler().lock() {
-        profiler.start_timer(name);
-    }
+    get_profiler().lock().start_timer(name);
 }
 
 pub fn stop_timer(name: &str) -> Option<f64> {
-    get_profiler().lock().ok().and_then(|mut p| p.stop_timer(name))
+    get_profiler().lock().stop_timer(name)
 }
 
 pub fn get_average_time(name: &str) -> Option<f64> {
-    get_profiler().lock().ok().and_then(|p| p.get_average_time(name))
+    get_profiler().lock().get_average_time(name)
 }
 
 pub fn get_last_time(name: &str) -> Option<f64> {
-    get_profiler().lock().ok().and_then(|p| p.get_last_time(name))
+    get_profiler().lock().get_last_time(name)
 }
 
 pub fn print_profile_report() {
-    if let Ok(profiler) = get_profiler().lock() {
-        profiler.print_profile_report();
-    }
+    get_profiler().lock().print_profile_report();
 }
 
 pub fn reset_profiler() {
-    if let Ok(mut profiler) = get_profiler().lock() {
-        profiler.reset();
-    }
+    get_profiler().lock().reset();
 }
 
 /// RAII-style profile scope for automatic timing
@@ -336,26 +322,23 @@ pub struct ProfileScope {
 
 impl ProfileScope {
     pub fn new(name: &str) -> Self {
-        if let Ok(mut profiler) = get_profiler().lock() {
-            profiler.start_timer(name);
-        }
+        let mut profiler = get_profiler().lock();
+        profiler.start_timer(name);
         Self { name: name.to_string() }
     }
 }
 
 impl Drop for ProfileScope {
     fn drop(&mut self) {
-        if let Ok(mut profiler) = get_profiler().lock() {
-            profiler.stop_timer(&self.name);
-        }
+        let mut profiler = get_profiler().lock();
+        profiler.stop_timer(&self.name);
     }
 }
 
 /// Begin a new profiling frame
 pub fn begin_frame() {
-    if let Ok(mut profiler) = get_profiler().lock() {
-        profiler.begin_frame();
-    }
+    let mut profiler = get_profiler().lock();
+    profiler.begin_frame();
 }
 
 /// End a profiling frame

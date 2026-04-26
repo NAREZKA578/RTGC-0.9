@@ -5,7 +5,6 @@ use nalgebra::Vector3;
 use rand_chacha::ChaCha8Rng;
 use rand::{Rng, RngCore, SeedableRng};
 use rand::prelude::SliceRandom;
-use std::collections::HashMap;
 
 /// Types of settlements in the game world
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

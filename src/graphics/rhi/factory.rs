@@ -7,14 +7,15 @@ use std::sync::Arc;
 use tracing;
 
 #[cfg(feature = "dx12")]
-use crate::graphics::rhi::dx12_module::Dx12Device;
+use crate::graphics::rhi::dx12::device_dx12::Dx12Device;
 
 #[cfg(feature = "dx11")]
-use crate::graphics::rhi::dx11::Dx11Device;
+use crate::graphics::rhi::dx11::device_dx11::Dx11Device;
 
 #[cfg(feature = "vulkan")]
-use crate::graphics::rhi::vulkan_module::VkDevice;
+use crate::graphics::rhi::vulkan::device_vk::VkDevice;
 
+#[cfg(feature = "gl")]
 use crate::graphics::rhi::gl::GlDevice;
 
 /// Graphics API backend selection
@@ -119,7 +120,7 @@ impl RhiFactory {
 
             #[cfg(feature = "vulkan")]
             RhiBackend::Vulkan => {
-                let device = VkDevice::new(config.debug_enabled, config.validation_enabled)?;
+                let device = VkDevice::new(config.validation_enabled)?;
                 Ok(Arc::new(device))
             }
 
@@ -232,7 +233,7 @@ impl RhiFactory {
         use ash::vk;
         use ash::Entry;
 
-        let entry = match Entry::new() {
+        let entry = match unsafe { Entry::load() } {
             Ok(e) => e,
             Err(_) => return false,
         };

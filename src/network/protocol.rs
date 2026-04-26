@@ -3,7 +3,6 @@
 // Note: This file only contains data structures - no network implementation yet
 
 use serde::{Serialize, Deserialize};
-use nalgebra::{Vector3, Quaternion};
 
 /// Unique identifier for a networked entity
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]

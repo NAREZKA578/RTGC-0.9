@@ -3,14 +3,14 @@
 //! Этот модуль предоставляет RenderManager, который координирует работу
 //! Renderer и GraphicsContext.
 
-use crate::graphics::{GraphicsContext, GlContext};
+use crate::graphics::GraphicsContext;
 use crate::graphics::renderer::{Renderer, RendererConfig};
 use crate::graphics::material::MaterialManager;
 use crate::graphics::particles::ParticleSystem;
 use crate::graphics::renderer::DebugRenderer;
 use crate::ui::HudManager;
-use std::sync::Arc;
-use tracing::{info, error};
+use nalgebra::Vector3;
+use tracing::info;
 
 /// Менеджер рендеринга
 pub struct RenderManager {
@@ -81,7 +81,6 @@ impl RenderManager {
                     device,
                     command_queue,
                     swapchain,
-                    &config,
                 )?;
                 
                 self.renderer = Some(renderer);
@@ -209,4 +208,16 @@ impl RenderManager {
     pub fn hud_manager(&self) -> &HudManager {
         &self.hud_manager
     }
+
+    /// Установить трансформацию транспортного средства
+    pub fn set_vehicle_transform(&mut self, _position: Vector3<f32>, _rotation: nalgebra::Quaternion<f32>) {}
+
+    /// Обновить камеру на основе позиции транспортного средства
+    pub fn update_camera_from_vehicle(&mut self, _position: Vector3<f32>, _rotation: nalgebra::Quaternion<f32>) {}
+
+    /// Установить цвета неба
+    pub fn set_sky_colors(&mut self, _sky_bottom: Vector3<f32>, _sky_top: Vector3<f32>) {}
+
+    /// Установить направление солнца
+    pub fn set_sun_direction(&mut self, _direction: Vector3<f32>) {}
 }

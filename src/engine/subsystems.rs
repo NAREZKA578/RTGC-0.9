@@ -5,9 +5,7 @@
 
 use crate::audio::AudioSystem;
 use crate::ecs::EcsManager;
-use crate::game::asset_manager::AssetManager;
 use crate::game::debug_menu::DebugMenu;
-use crate::game::interaction::InteractionSystem;
 use crate::game::loading_manager::LoadingManager;
 use crate::game::save::SaveSystem;
 use crate::game::ui::UIManager;
@@ -19,7 +17,6 @@ use crate::input::InputManager;
 use crate::physics;
 use crate::ui::HudManager;
 use crate::world::DayNightCycle;
-use std::sync::Arc;
 
 /// Контейнер для всех подсистем движка
 ///
@@ -82,13 +79,13 @@ impl EngineSubsystems {
     }
 
     /// Обновляет все подсистемы
-    pub fn update(&mut self, dt: f32) {
+pub fn update(&mut self, dt: f32) {
         self.graphics.update(dt);
         self.physics.update(dt);
-        self.ui.update(dt);
+        self.ui.hud_manager.update(&crate::ui::hud::VehicleHudData::default(), &crate::ui::hud::HudLayout::default(), dt);
+        self.ui.ui_manager.update(dt);
         self.world.update(dt);
         self.ecs.update(dt);
-        // input, audio, loading, save обновляются по мере необходимости
     }
 }
 
@@ -132,7 +129,7 @@ impl GraphicsSubsystem {
 
     pub fn render(&mut self) -> Result<(), crate::error::EngineError> {
         if let Some(ref mut renderer) = self.renderer {
-            renderer.render().map_err(|e| {
+            renderer.render().map_err(|e: String| {
                 crate::error::EngineError::Graphics(crate::error::GraphicsError::PipelineError(
                     e.to_string(),
                 ))
@@ -180,10 +177,9 @@ impl UISubsystem {
         }
     }
 
-    pub fn update(&mut self, dt: f32) {
-        self.hud_manager
-            .update(crate::ui::hud::VehicleHudData::default(), dt);
-        self.ui_manager.update(dt);
+    pub fn update(&mut self, _dt: f32) {
+        self.hud_manager.update(&crate::ui::hud::VehicleHudData::default(), &crate::ui::hud::HudLayout::default(), _dt);
+        self.ui_manager.update(_dt);
     }
 }
 

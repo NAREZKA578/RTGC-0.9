@@ -115,7 +115,7 @@ impl Worker {
         active_jobs: Arc<AtomicUsize>,
         shutdown: Arc<AtomicBool>,
     ) -> Worker {
-        let thread = thread::Builder::new()
+        let thread_result = thread::Builder::new()
             .name(format!("physics-worker-{}", id))
             .spawn(move || loop {
                 // Сначала проверяем флаг shutdown
@@ -138,11 +138,11 @@ impl Worker {
                         continue;
                     }
                 }
-            })
-            .map_err(|e| crate::error::EngineError::Physics(format!("Thread spawn failed: {}", e)))?;
+            });
 
-        Worker {
-            thread: Some(thread),
+        match thread_result {
+            Ok(thread) => Worker { thread: Some(thread) },
+            Err(_) => Worker { thread: None },
         }
     }
 }

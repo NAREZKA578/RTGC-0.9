@@ -2,29 +2,31 @@
 //! 
 //! Использует RHI для абстракции над графическим бэкендом
 
-use crate::graphics::rhi::{IDevice, ICommandQueue, ISwapChain, ICommandList, ResourceHandle};
+use parking_lot::Mutex;
+use crate::graphics::rhi::{IDevice, ICommandQueue, ISwapChain, ICommandList, ResourceHandle, CommandListType, CommandListGuard, make_command_list_guard};
 use crate::graphics::renderer::{
     SceneRenderer, UIRenderer, DebugRenderer, PipelineCache,
     MainRenderPass, ShadowRenderPass, PostProcessRenderPass,
-    RenderCommand, UiCommand, RendererConfig,
+    RenderCommand, UiCommand,
 };
 use crate::graphics::camera::Camera;
 use crate::graphics::terrain_renderer::TerrainRenderer;
 use crate::graphics::sky_renderer::SkyRenderer;
+use nalgebra::Vector3;
 use std::sync::Arc;
 
 /// Основной Renderer
 pub struct Renderer {
-    device: Arc<dyn IDevice>,
-    command_queue: Arc<dyn ICommandQueue>,
-    swap_chain: Arc<dyn ISwapChain>,
+    pub device: Arc<dyn IDevice>,
+    pub command_queue: Arc<dyn ICommandQueue>,
+    pub swap_chain: Arc<dyn ISwapChain>,
     
     // Под-рендереры
-    scene_renderer: SceneRenderer,
-    ui_renderer: UIRenderer,
-    debug_renderer: DebugRenderer,
-    terrain_renderer: TerrainRenderer,
-    sky_renderer: SkyRenderer,
+    pub scene_renderer: SceneRenderer,
+    pub ui_renderer: UIRenderer,
+    pub debug_renderer: DebugRenderer,
+    pub terrain_renderer: TerrainRenderer,
+    pub sky_renderer: SkyRenderer,
     
     // Кэш пайплайнов
     pipeline_cache: PipelineCache,
@@ -48,70 +50,75 @@ pub struct Renderer {
 
 impl Renderer {
     /// Создаёт новый рендерер
-    pub fn new(
-        device: Arc<dyn IDevice>,
-        command_queue: Arc<dyn ICommandQueue>,
-        swap_chain: Arc<dyn ISwapChain>,
-        config: &RendererConfig,
-    ) -> Result<Self, String> {
-        let width = config.width;
-        let height = config.height;
+    pub fn new(device: Arc<dyn IDevice>, command_queue: Arc<dyn ICommandQueue>, swap_chain: Arc<dyn ISwapChain>) -> Result<Self, String> {
+        let width = swap_chain.width();
+        let height = swap_chain.height();
         
-        // Создаём под-рендереры
-        let mut scene_renderer = SceneRenderer::new(device.clone());
-        let mut ui_renderer = UIRenderer::new(device.clone(), width, height);
-        let debug_renderer = DebugRenderer::new(device.clone());
-        let mut terrain_renderer = TerrainRenderer::new(device.clone());
-        let mut sky_renderer = SkyRenderer::new(device.clone());
+        // Initialize renderers
+        let scene_renderer = SceneRenderer::new(device.clone());
+        let ui_renderer = UIRenderer::new(device.clone());
+        let debug_renderer = DebugRenderer::new_with_device(device.clone(), 10000);
+        let terrain_renderer = TerrainRenderer::new(device.clone());
+        let sky_renderer = SkyRenderer::new(device.clone());
         
-        // Инициализируем UI рендерер (шейдеры, PSO, буферы)
-        ui_renderer.initialize()
-            .map_err(|e| format!("Failed to initialize UI renderer: {}", e))?;
+        // Initialize pipeline cache
+        let pipeline_cache = PipelineCache::new();
         
-        // Инициализируем Scene рендерер
-        scene_renderer.initialize()
-            .map_err(|e| format!("Failed to initialize Scene renderer: {}", e))?;
-        
-        // Инициализируем Terrain рендерер
-        terrain_renderer.initialize()
-            .map_err(|e| format!("Failed to initialize Terrain renderer: {}", e))?;
-        
-        // Инициализируем Sky рендерер
-        sky_renderer.initialize()
-            .map_err(|e| format!("Failed to initialize Sky renderer: {}", e))?;
+        // Initialize render passes - create passes after getting attachments from swapchain
+        let main_pass = None;
+        let shadow_pass = None;
+        let post_process_pass = None;
         
         let mut renderer = Self {
-            device: device.clone(),
+            device,
             command_queue,
-            swap_chain: swap_chain.clone(),
+            swap_chain,
             scene_renderer,
             ui_renderer,
             debug_renderer,
             terrain_renderer,
             sky_renderer,
-            pipeline_cache: PipelineCache::new(),
-            main_pass: None,
-            shadow_pass: None,
-            post_process_pass: None,
-            camera: Camera::default(),
+            pipeline_cache,
+            main_pass,
+            shadow_pass,
+            post_process_pass,
+            camera: Camera::new(
+                Vector3::new(0.0, 5.0, -10.0),
+                Vector3::new(0.0, 0.0, 0.0),
+                Vector3::new(0.0, 1.0, 0.0),
+                45.0,
+                width as f32 / height as f32,
+                0.1,
+                1000.0,
+            ),
             width,
             height,
-            debug_mode: config.debug_mode,
-            vsync: config.vsync,
+            debug_mode: false,
+            vsync: true,
         };
         
-        // Инициализируем под-рендереры
-        renderer.scene_renderer.initialize()?;
-        renderer.ui_renderer.initialize()?;
-        renderer.debug_renderer.initialize()?;
-        
-        // Обновляем орто-матрицу UI
-        renderer.ui_renderer.update_ortho_matrix(width, height);
-        
-        // Создаём render passes с размерами экрана
-        renderer.create_render_passes()?;
+        // Initialize camera
+        renderer.camera.set_position(Vector3::new(0.0, 5.0, -10.0));
+        renderer.camera.set_target(Vector3::new(0.0, 0.0, 0.0));
+        renderer.camera.set_up(Vector3::new(0.0, 1.0, 0.0));
+        renderer.camera.set_perspective(45.0, width as f32 / height as f32, 0.1, 1000.0);
         
         Ok(renderer)
+    }
+    
+    /// Get screen width
+    pub fn get_width(&self) -> u32 {
+        self.width
+    }
+    
+    /// Get screen height
+    pub fn get_height(&self) -> u32 {
+        self.height
+    }
+    
+    /// Render a single frame
+    pub fn render(&mut self) -> Result<(), String> {
+        self.render_frame()
     }
     
     /// Создаёт все render passes
@@ -133,6 +140,77 @@ impl Renderer {
         ));
         
         Ok(())
+    }
+    
+    /// Рисует текст (заглушка через UIRenderer)
+    pub fn draw_text(&mut self, text: &str, x: f32, y: f32, size: f32, color: [f32; 4]) {
+        if !text.is_empty() {
+            self.ui_renderer.add_text_simple(text, [x, y], size, color);
+        }
+    }
+    
+    /// Рисует прямоугольник (заглушка через UIRenderer)
+    pub fn draw_rect(&mut self, x: f32, y: f32, width: f32, height: f32, color: [f32; 4]) {
+        self.ui_renderer.add_rect([x, y], [width, height], color, None);
+    }
+    
+    /// Рисует рамку прямоугольника
+    pub fn draw_rect_border(&mut self, x: f32, y: f32, width: f32, height: f32, border_width: f32, color: [f32; 4]) {
+        let bw = border_width;
+        // Top border
+        self.ui_renderer.add_rect([x, y], [width, bw], color, None);
+        // Bottom border  
+        self.ui_renderer.add_rect([x, y + height - bw], [width, bw], color, None);
+        // Left border
+        self.ui_renderer.add_rect([x, y], [bw, height], color, None);
+        // Right border
+        self.ui_renderer.add_rect([x + width - bw, y], [bw, height], color, None);
+    }
+    
+    /// Рисует линию
+    pub fn draw_line(&mut self, x1: f32, y1: f32, x2: f32, y2: f32, color: [f32; 4]) {
+        let vertices = vec![[x1, y1, 0.0], [x2, y2, 0.0]];
+        let colors = vec![color, color];
+        self.debug_renderer.add_lines_vec(vertices, colors);
+    }
+
+    /// Рисует линию (старый API с thickness)
+    pub fn draw_line_old(&mut self, x1: f32, y1: f32, x2: f32, y2: f32, _thickness: f32, color: [f32; 4]) {
+        self.draw_line(x1, y1, x2, y2, color);
+    }
+    
+    /// Рисует треугольник
+    pub fn draw_triangle(&mut self, x: f32, y: f32, size: f32, color: [f32; 4]) {
+        let h = size * 0.866;
+        let vertices = vec![
+            [x, y, 0.0],
+            [x + size, y, 0.0],
+            [x + size * 0.5, y + h, 0.0]
+        ];
+        let colors = vec![color, color, color];
+        self.debug_renderer.add_lines_vec(vertices, colors);
+    }
+
+    /// Рисует треугольник (старый API с координатами вершин)
+    pub fn draw_triangle_old(&mut self, x1: f32, y1: f32, x2: f32, y2: f32, x3: f32, y3: f32, color: [f32; 4]) {
+        let vertices = vec![[x1, y1, 0.0], [x2, y2, 0.0], [x3, y3, 0.0]];
+        let colors = vec![color, color, color];
+        self.debug_renderer.add_lines_vec(vertices, colors);
+    }
+    
+    /// Рисует круг
+    pub fn draw_circle(&mut self, x: f32, y: f32, radius: f32, color: [f32; 4], segments: u32) {
+        let mut vertices = Vec::new();
+        let mut colors = Vec::new();
+        let segs = segments.max(3) as usize;
+        for i in 0..=segs {
+            let angle = (i as f32 / segs as f32) * std::f32::consts::TAU;
+            let vx = x + radius * angle.cos();
+            let vy = y + radius * angle.sin();
+            vertices.push([vx, vy, 0.0]);
+            colors.push(color);
+        }
+        self.debug_renderer.add_lines_vec(vertices, colors);
     }
     
     /// Начинает кадр
@@ -201,42 +279,58 @@ impl Renderer {
     
     /// Рендер кадра (основной метод)
     pub fn render_frame(&mut self) -> Result<(), String> {
+        use parking_lot::Mutex;
+        
+use crate::graphics::rhi::make_command_list_guard;
+
         // Создаём command list для текущего кадра
-        let mut cmd_list = self.device.create_command_list(crate::graphics::rhi::CommandListType::Graphics)
+        let cmd_list = self.device.create_command_list(crate::graphics::rhi::CommandListType::Direct)
             .map_err(|e| format!("Failed to create command list: {:?}", e))?;
         
-        // Начинаем render pass с очисткой экрана
+        let cmd_guard = make_command_list_guard(cmd_list);
+        
         if let Some(ref main_pass) = self.main_pass {
-            cmd_list.begin_render_pass(&main_pass.description());
-            
-            // Здесь будет рендеринг сцены, UI и отладки
-            // Пока просто очищаем экран цветом из main_pass
-            
-            cmd_list.end_render_pass();
+            let mut cmd = cmd_guard.lock();
+            cmd.begin_render_pass(&main_pass.description());
+            cmd.end_render_pass();
         }
         
-        // Завершаем command list и отправляем на выполнение
-        cmd_list.close();
-        self.command_queue.submit(&[&cmd_list])
+        // Завершаем command list
+        {
+            let mut cmd = cmd_guard.lock();
+            cmd.close();
+        }
+        
+        // Отправляем на выполнение
+        let guard = cmd_guard.lock();
+        let raw_ref: &dyn ICommandList = &**guard;
+        self.command_queue.submit(&[raw_ref], &[], &[])
             .map_err(|e| format!("Failed to submit command list: {:?}", e))?;
         
         // Present
         self.end_frame()
     }
-
+    
     /// Рендер кадра с поддержкой состояний движка (меню, загрузка, игра)
     pub fn render_frame_with_state(
         &mut self,
         game_state: &crate::engine::state::EngineState,
         main_menu: &crate::game::MainMenu,
     ) -> Result<(), String> {
-        // Создаём command list для текущего кадра
-        let mut cmd_list = self.device.create_command_list(crate::graphics::rhi::CommandListType::Graphics)
+use crate::graphics::rhi::make_command_list_guard;
+
+// Создаём command list для текущего кадра
+        let cmd_list = self.device.create_command_list(crate::graphics::rhi::CommandListType::Direct)
             .map_err(|e| format!("Failed to create command list: {:?}", e))?;
+        
+        let cmd_guard = make_command_list_guard(cmd_list);
         
         // Начинаем render pass с очисткой экрана
         if let Some(ref main_pass) = self.main_pass {
-            cmd_list.begin_render_pass(&main_pass.description());
+            {
+                let mut cmd = cmd_guard.lock();
+                cmd.begin_render_pass(&main_pass.description());
+            }
             
             match game_state {
                 crate::engine::state::EngineState::MainMenu { .. } => {
@@ -244,17 +338,17 @@ impl Renderer {
                     let window_size = [self.width as f32, self.height as f32];
                     let mut ui_commands = Vec::new();
                     main_menu.render(&mut ui_commands, window_size);
-                    self.render_ui(&ui_commands, &mut cmd_list)?;
+                    self.render_ui(&ui_commands, &cmd_guard)?;
                 }
                 crate::engine::state::EngineState::Loading { progress, resource_type } => {
                     // Рендеринг экрана загрузки
                     let message = format!("Loading {:?}...", resource_type);
-                    self.ui_renderer.render_loading_screen(*progress, &message, &mut cmd_list)?;
+                    self.ui_renderer.render_loading_screen(*progress, &message, &cmd_guard)?;
                 }
                 crate::engine::state::EngineState::Playing { .. } |
                 crate::engine::state::EngineState::Paused { .. } => {
                     // Рендеринг 3D сцены
-                    self.render_3d_scene(&mut cmd_list)?;
+                    self.render_3d_scene(&cmd_guard)?;
                     
                     // Если пауза, добавляем полупрозрачный оверлей
                     if matches!(game_state, crate::engine::state::EngineState::Paused { .. }) {
@@ -262,7 +356,7 @@ impl Renderer {
                             position: [0.0, 0.0],
                             size: [self.width as f32, self.height as f32],
                             color: [0.0, 0.0, 0.0, 0.5],
-                        }], &mut cmd_list)?;
+                        }], &cmd_guard)?;
                     }
                 }
                 _ => {
@@ -270,12 +364,20 @@ impl Renderer {
                 }
             }
             
-            cmd_list.end_render_pass();
+            {
+                let mut cmd = cmd_guard.lock();
+                cmd.end_render_pass();
+            }
         }
         
         // Завершаем command list и отправляем на выполнение
-        cmd_list.close();
-        self.command_queue.submit(&[&cmd_list])
+        {
+            let mut cmd = cmd_guard.lock();
+            cmd.close();
+        }
+        let guard = cmd_guard.lock();
+        let raw_ref: &dyn ICommandList = &**guard;
+        self.command_queue.submit(&[raw_ref], &[], &[])
             .map_err(|e| format!("Failed to submit command list: {:?}", e))?;
         
         // Present
@@ -283,7 +385,7 @@ impl Renderer {
     }
     
     /// Рендерит 3D сцену (террейн, небо, объекты)
-    fn render_3d_scene(&mut self, cmd_list: &mut dyn crate::graphics::rhi::ICommandList) -> Result<(), String> {
+    fn render_3d_scene(&mut self, cmd_list: &CommandListGuard) -> Result<(), String> {
         use crate::graphics::renderer::scene::SceneRenderer;
         
         // Вычисляем плоскости фрустума
@@ -315,13 +417,13 @@ impl Renderer {
     }
     
     /// Рендерит сцену
-    pub fn render_scene(&mut self, commands: &[RenderCommand], cmd_list: &mut dyn ICommandList) -> Result<(), String> {
+    pub fn render_scene(&mut self, commands: &[RenderCommand], cmd_list: &CommandListGuard) -> Result<(), String> {
         self.scene_renderer.render(&self.camera, commands, cmd_list)?;
         Ok(())
     }
     
     /// Рендерит UI
-    pub fn render_ui(&mut self, commands: &[UiCommand], cmd_list: &mut dyn ICommandList) -> Result<(), String> {
+    pub fn render_ui(&mut self, commands: &[UiCommand], cmd_list: &CommandListGuard) -> Result<(), String> {
         self.ui_renderer.render(commands, cmd_list)?;
         Ok(())
     }
@@ -341,13 +443,20 @@ impl Renderer {
         Ok(())
     }
     
+    /// Создаёт command list для записи GPU команд
+    pub fn create_command_list(&mut self, cmd_type: CommandListType) -> Result<CommandListGuard, String> {
+        self.device.create_command_list(cmd_type)
+            .map(|cmd| make_command_list_guard(cmd))
+            .map_err(|e| format!("Failed to create command list: {:?}", e))
+    }
+    
     /// Обрабатывает изменение размера окна
     pub fn resize(&mut self, width: u32, height: u32) {
         self.width = width.max(1);
         self.height = height.max(1);
         
         // Обновляем камеру
-        self.camera.update_aspect(self.width as f32, self.height as f32);
+        self.camera.update_aspect(self.width, self.height);
         
         // Обновляем UI орто-матрицу
         self.ui_renderer.update_ortho_matrix(self.width, self.height);

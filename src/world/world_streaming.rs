@@ -7,12 +7,12 @@
 //! - GPU resource upload
 
 use std::collections::VecDeque;
-use std::sync::Arc;
+
 use std::thread::{self, JoinHandle};
 use crossbeam_channel::{bounded, Sender, Receiver, TrySendError};
-use tracing::{info, debug, warn, error};
+use tracing::{debug, warn, error};
 
-use super::chunk::{Chunk, ChunkId, ChunkData, generate_chunk_mesh, TerrainVertex};
+use super::chunk::{Chunk, ChunkId, generate_chunk_mesh, TerrainVertex};
 
 /// Configuration for world streaming
 #[derive(Debug, Clone)]

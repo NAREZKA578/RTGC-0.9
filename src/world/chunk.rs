@@ -1,7 +1,6 @@
 //! Chunk data structure for world streaming
 
 use nalgebra::Vector3;
-use std::sync::Arc;
 
 /// Size of a chunk in meters (must be power of 2 for efficient LOD)
 pub const CHUNK_SIZE: u32 = 64;
@@ -230,6 +229,8 @@ pub struct TerrainVertex {
     pub texcoord: [f32; 2],
     pub splat_weights: [f32; 4],
 }
+
+unsafe impl bytemuck::NoUninit for TerrainVertex {}
 
 impl TerrainVertex {
     pub fn zeroed() -> Self {

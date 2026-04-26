@@ -36,6 +36,50 @@ impl Camera {
         position: Vector3<f32>,
         target: Vector3<f32>,
         up: Vector3<f32>,
+        fov: f32,
+        aspect: f32,
+        near: f32,
+        far: f32,
+    ) -> Self {
+        Self {
+            position,
+            target,
+            up,
+            fov,
+            aspect,
+            near,
+            far,
+        }
+    }
+    
+    /// Установить позицию камеры
+    pub fn set_position(&mut self, position: Vector3<f32>) {
+        self.position = position;
+    }
+    
+    /// Установить цель (куда смотрит камера)
+    pub fn set_target(&mut self, target: Vector3<f32>) {
+        self.target = target;
+    }
+    
+    /// Установить вектор "вверх"
+    pub fn set_up(&mut self, up: Vector3<f32>) {
+        self.up = up;
+    }
+    
+    /// Установить перспективу
+    pub fn set_perspective(&mut self, fov: f32, aspect: f32, near: f32, far: f32) {
+        self.fov = fov;
+        self.aspect = aspect;
+        self.near = near;
+        self.far = far;
+    }
+    
+    /// Create a camera looking at target
+    pub fn look_at(
+        position: Vector3<f32>,
+        target: Vector3<f32>,
+        up: Vector3<f32>,
         fov_degrees: f32,
         aspect: f32,
         near: f32,
@@ -89,13 +133,15 @@ impl Camera {
 
     /// Вращает камеру вокруг цели
     pub fn rotate_around_target(&mut self, yaw: f32, pitch: f32) {
+        use nalgebra::{Unit, Quaternion};
+        
         let offset = self.position - self.target;
         
-        // Применяем вращение
-        let rotation_yaw = Matrix4::new_rotation_z(yaw);
-        let rotation_pitch = Matrix4::new_rotation_x(pitch);
+        // Применяем вращение через quaternion
+        let q_yaw = Unit::new_normalize(Quaternion::new(0.0, 0.0, yaw.sin(), yaw.cos()));
+        let q_pitch = Unit::new_normalize(Quaternion::new(pitch.sin(), 0.0, 0.0, pitch.cos()));
         
-        let rotated = rotation_pitch * rotation_yaw * offset;
+        let rotated = q_pitch * q_yaw * offset;
         self.position = self.target + rotated;
     }
 }

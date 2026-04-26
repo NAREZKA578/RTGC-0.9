@@ -7,18 +7,18 @@
 //! - Физика тросов и грузов
 //! - Ограничители грузоподъёмности
 
-use nalgebra::{Matrix3, Point3, Quaternion, UnitQuaternion, Vector3};
+use nalgebra::{Matrix3, Point3, UnitQuaternion, Vector3};
 use std::f32::consts::PI;
 
-use super::physics_module::{Ray, RaycastHit, RigidBody, LAYER_CARGO, LAYER_WORLD};
+use super::physics_module::{Ray, RaycastHit, RigidBody};
 
 /// Типы крановых установок
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CraneType {
     /// Автомобильный кран (Ивановец КС-4571)
-    TruckCrane_25t,
+TruckCrane25t,
     /// Тяжёлый автокран (Галичанин КС-6571)
-    TruckCrane_50t,
+    TruckCrane50t,
     /// Гусеничный кран
     CrawlerCrane,
     /// Буровая установка
@@ -31,8 +31,8 @@ impl CraneType {
     /// Максимальная грузоподъёмность (кг)
     pub fn max_load_capacity(&self) -> f32 {
         match self {
-            CraneType::TruckCrane_25t => 25_000.0,
-            CraneType::TruckCrane_50t => 50_000.0,
+            CraneType::TruckCrane25t => 25_000.0,
+            CraneType::TruckCrane50t => 50_000.0,
             CraneType::CrawlerCrane => 100_000.0,
             CraneType::DrillingRig => 5_000.0,
             CraneType::ExcavatorCrane => 3_000.0,
@@ -42,8 +42,8 @@ impl CraneType {
     /// Максимальная длина стрелы (м)
     pub fn max_boom_length(&self) -> f32 {
         match self {
-            CraneType::TruckCrane_25t => 31.0,
-            CraneType::TruckCrane_50t => 45.0,
+            CraneType::TruckCrane25t => 31.0,
+            CraneType::TruckCrane50t => 45.0,
             CraneType::CrawlerCrane => 60.0,
             CraneType::DrillingRig => 20.0,
             CraneType::ExcavatorCrane => 12.0,
@@ -53,8 +53,8 @@ impl CraneType {
     /// Минимальная длина стрелы (м)
     pub fn min_boom_length(&self) -> f32 {
         match self {
-            CraneType::TruckCrane_25t => 10.0,
-            CraneType::TruckCrane_50t => 12.0,
+            CraneType::TruckCrane25t => 10.0,
+            CraneType::TruckCrane50t => 12.0,
             CraneType::CrawlerCrane => 15.0,
             CraneType::DrillingRig => 8.0,
             CraneType::ExcavatorCrane => 5.0,
@@ -64,8 +64,8 @@ impl CraneType {
     /// Скорость подъёма груза (м/с)
     pub fn hoist_speed(&self) -> f32 {
         match self {
-            CraneType::TruckCrane_25t => 0.5,
-            CraneType::TruckCrane_50t => 0.4,
+            CraneType::TruckCrane25t => 0.5,
+            CraneType::TruckCrane50t => 0.4,
             CraneType::CrawlerCrane => 0.3,
             CraneType::DrillingRig => 0.2,
             CraneType::ExcavatorCrane => 0.6,
@@ -75,8 +75,8 @@ impl CraneType {
     /// Скорость поворота башни (рад/с)
     pub fn slew_speed(&self) -> f32 {
         match self {
-            CraneType::TruckCrane_25t => 0.03,
-            CraneType::TruckCrane_50t => 0.025,
+            CraneType::TruckCrane25t => 0.03,
+            CraneType::TruckCrane50t => 0.025,
             CraneType::CrawlerCrane => 0.02,
             CraneType::DrillingRig => 0.04,
             CraneType::ExcavatorCrane => 0.05,
@@ -86,8 +86,8 @@ impl CraneType {
     /// Масса крана без груза (кг)
     pub fn empty_mass(&self) -> f32 {
         match self {
-            CraneType::TruckCrane_25t => 28_000.0,
-            CraneType::TruckCrane_50t => 45_000.0,
+            CraneType::TruckCrane25t => 28_000.0,
+            CraneType::TruckCrane50t => 45_000.0,
             CraneType::CrawlerCrane => 80_000.0,
             CraneType::DrillingRig => 15_000.0,
             CraneType::ExcavatorCrane => 12_000.0,
@@ -149,7 +149,7 @@ pub struct CraneConfig {
 impl Default for CraneConfig {
     fn default() -> Self {
         Self {
-            crane_type: CraneType::TruckCrane_25t,
+            crane_type: CraneType::TruckCrane25t,
             base_position: Vector3::zeros(),
             max_elevation_angle: PI / 2.0 - 0.1, // Почти вертикально
             min_elevation_angle: 0.05,           // Почти горизонтально
@@ -552,16 +552,16 @@ mod tests {
 
     #[test]
     fn test_crane_creation() {
-        let crane = CraneArm::new(CraneType::TruckCrane_25t, Vector3::new(0.0, 0.0, 0.0));
+        let crane = CraneArm::new(CraneType::TruckCrane25t, Vector3::new(0.0, 0.0, 0.0));
 
-        assert_eq!(crane.config.crane_type, CraneType::TruckCrane_25t);
+        assert_eq!(crane.config.crane_type, CraneType::TruckCrane25t);
         assert_eq!(crane.mass, 28_000.0);
         assert!(!crane.overloaded);
     }
 
     #[test]
     fn test_attach_load() {
-        let mut crane = CraneArm::new(CraneType::TruckCrane_25t, Vector3::zeros());
+        let mut crane = CraneArm::new(CraneType::TruckCrane25t, Vector3::zeros());
 
         // Должен успешно прицепить груз 10 тонн
         assert!(crane
@@ -575,7 +575,7 @@ mod tests {
 
     #[test]
     fn test_boom_tip_position() {
-        let crane = CraneArm::new(CraneType::TruckCrane_25t, Vector3::new(0.0, 10.0, 0.0));
+        let crane = CraneArm::new(CraneType::TruckCrane25t, Vector3::new(0.0, 10.0, 0.0));
 
         let tip = crane.get_boom_tip_position();
 
@@ -589,7 +589,7 @@ mod tests {
 
     #[test]
     fn test_stability_check() {
-        let mut crane = CraneArm::new(CraneType::TruckCrane_25t, Vector3::zeros());
+        let mut crane = CraneArm::new(CraneType::TruckCrane25t, Vector3::zeros());
 
         // Без аутригеров - нестабилен
         assert!(!crane.check_stability());
@@ -609,7 +609,7 @@ mod tests {
 
     #[test]
     fn test_crane_physics_handles_nan() {
-        let mut crane = CraneArm::new(CraneType::TruckCrane_25t, Vector3::zeros());
+        let mut crane = CraneArm::new(CraneType::TruckCrane25t, Vector3::zeros());
 
         // Test that NaN in state is detected
         assert!(crane.validate_state());

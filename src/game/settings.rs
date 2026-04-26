@@ -523,8 +523,8 @@ impl SettingsManager {
         // Apply graphics settings
         tracing::debug!(
             "Applying graphics settings: quality={:?}, shadows={:?}, aa={:?}",
-            self.settings.graphics.quality_preset,
-            self.settings.graphics.shadows_quality,
+            self.settings.graphics.texture_quality,
+            self.settings.graphics.shadow_quality,
             self.settings.graphics.anti_aliasing
         );
 
@@ -543,7 +543,7 @@ impl SettingsManager {
         tracing::debug!(
             "Applying gameplay settings: difficulty={:?}, autosave={}",
             self.settings.gameplay.difficulty,
-            self.settings.gameplay.autosave_enabled
+            self.settings.gameplay.auto_save
         );
 
         tracing::info!("Settings applied successfully");

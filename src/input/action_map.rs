@@ -1,10 +1,10 @@
 //! Action Map - Enhanced input action system with 15+ actions and state tracking
 
 use std::collections::HashMap;
-use winit::keyboard::{KeyCode, PhysicalKey};
-use winit::event::{ElementState, MouseButton as WinitMouseButton};
-use crate::input::mapping::{InputAction, InputMapping, MouseButton};
-use crate::input::gamepad::{GamepadButton, GamepadAxis, GamepadState};
+use winit::keyboard::KeyCode;
+use winit::event::ElementState;
+use crate::input::mapping::MouseButton;
+use crate::input::gamepad::GamepadButton;
 
 /// State of an input action
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -328,7 +328,7 @@ impl ActionMap {
         self.previous_states = self.action_states.clone();
 
         // Transition states
-        for (&action, state) in &mut self.action_states {
+        for (&_action, state) in &mut self.action_states {
             match state {
                 ActionState::JustPressed => *state = ActionState::Held,
                 ActionState::JustReleased => *state = ActionState::Released,

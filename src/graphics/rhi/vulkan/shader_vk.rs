@@ -45,7 +45,7 @@ impl VkShader {
     }
     
     #[cfg(not(feature = "vulkan"))]
-    pub fn new(_device: &ash::Device, _spirv_data: &[u8], stage: ShaderStage, entry_point: &str) -> RhiResult<Self> {
+    pub fn new(_device: &ash::Device, _spirv_data: &[u8], _stage: ShaderStage, _entry_point: &str) -> RhiResult<Self> {
         Err(RhiError::Unsupported("Vulkan feature not enabled".to_string()))
     }
     

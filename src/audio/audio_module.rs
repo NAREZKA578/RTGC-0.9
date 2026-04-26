@@ -1,12 +1,10 @@
 // Audio Module - 3D Spatial Audio with Occlusion
 // Advanced audio system with positional audio and occlusion support
 
-use crate::config::AudioConfig;
 use nalgebra::Vector3;
 use parking_lot::Mutex;
-use rodio::{OutputStream, Sink, Source};
+use rodio::{OutputStream, Sink};
 use std::collections::HashMap;
-use std::path::Path;
 use std::sync::Arc;
 use tracing;
 
@@ -142,7 +140,7 @@ pub enum OcclusionMaterial {
 
 impl OcclusionMaterial {
     /// Коэффициент поглощения звука (0.0 = полное прохождение, 1.0 = полная блокировка)
-    pub fn absorption_coefficient(&self, frequency: f32) -> f32 {
+    pub fn absorption_coefficient(&self, _frequency: f32) -> f32 {
         // Упрощенная модель - в реальности зависит от частоты
         match self {
             OcclusionMaterial::Air => 0.0,
@@ -228,6 +226,10 @@ impl Clone for AudioSystem {
             sound_cache: self.sound_cache.clone(),
             max_sources: self.max_sources,
             occlusion_enabled: self.occlusion_enabled,
+            // NOTE: _stream is not cloned - only the original owns the audio device.
+            // The clone shares the same sink if available, but audio playback will
+            // only work if the original AudioSystem is still alive and holding the stream.
+            // This is a design trade-off - use AudioSystem::new() for active audio.
             _stream: None,
             sink: self.sink.clone(),
         }
@@ -489,7 +491,7 @@ impl AudioSystem {
         &self,
         samples: &[f32],
         azimuth: f32,
-        elevation: f32,
+        _elevation: f32,
     ) -> (Vec<f32>, Vec<f32>) {
         // Упрощенная HRTF модель
         // В реальной реализации использовались бы таблицы HRTF (например, CIPIC или MIT databases)

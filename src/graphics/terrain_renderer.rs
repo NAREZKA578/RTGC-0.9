@@ -105,7 +105,7 @@ impl TerrainRenderer {
     }
     
     /// Собирает команды рендеринга для видимых чанков
-    pub fn collect_render_commands(&self, camera_pos: Vector3<f32>, frustum_planes: &[[f32; 4]; 6]) -> Vec<RenderCommand> {
+    pub fn collect_render_commands(&self, _camera_pos: Vector3<f32>, frustum_planes: &[[f32; 4]; 6]) -> Vec<RenderCommand> {
         let mut commands = Vec::with_capacity(self.rendered_chunks.len());
         
         for rendered_chunk in self.rendered_chunks.values() {

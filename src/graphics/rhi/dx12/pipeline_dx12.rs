@@ -306,7 +306,6 @@ impl Dx12PipelineState {
             DepthClipEnable: true.into(),
             MultisampleEnable: false.into(),
             AntialiasedLineEnable: false.into(),
-            ForcedSampleCount: 0,
             ConservativeRaster: D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF,
         }
     }

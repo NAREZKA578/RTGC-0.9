@@ -54,7 +54,7 @@ impl OpenWorldScene {
         Self {
             name: "Open World".to_string(),
             world_loaded: false,
-            seed,
+            seed: seed as u64,
             terrain_data: Vec::new(),
             terrain_resolution: 256,
             terrain_size: 10000.0, // 10km x 10km world

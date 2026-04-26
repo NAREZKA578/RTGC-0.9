@@ -5,7 +5,7 @@
 
 use crate::input::InputManager;
 use tracing::debug;
-use winit::event::{ElementState, MouseButton};
+use winit::event::MouseButton;
 use winit::keyboard::{KeyCode, PhysicalKey};
 
 /// Менеджер ввода для движка
@@ -51,6 +51,11 @@ impl InputManagerWrapper {
     /// Получает состояние ввода
     pub fn state(&self) -> &crate::input::input_module::InputState {
         self.input_manager.state()
+    }
+
+    /// Получает доступ к InputManager
+    pub fn input_manager(&self) -> &InputManager {
+        &self.input_manager
     }
 
     /// Обрабатывает событие клавиатуры для движения персонажа

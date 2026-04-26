@@ -17,35 +17,14 @@ pub struct PipelineKey {
 
 impl PipelineKey {
     pub fn from_pso(pso: &PipelineStateObject) -> Self {
-        use std::hash::{Hash, Hasher};
-        use std::collections::hash_map::DefaultHasher;
-        
-        let mut hasher = DefaultHasher::new();
-        pso.input_layout.hash(&mut hasher);
-        let input_layout_hash = hasher.finish();
-        
-        let mut hasher = DefaultHasher::new();
-        for blend in &pso.color_blend_states {
-            blend.hash(&mut hasher);
-        }
-        let blend_state_hash = hasher.finish();
-        
-        let mut hasher = DefaultHasher::new();
-        pso.depth_state.hash(&mut hasher);
-        let depth_state_hash = hasher.finish();
-        
-        let mut hasher = DefaultHasher::new();
-        pso.rasterizer_state.hash(&mut hasher);
-        let rasterizer_state_hash = hasher.finish();
-        
         Self {
             vertex_shader: pso.vertex_shader.0,
-            fragment_shader: pso.fragment_shader.map(|h| h.0),
-            input_layout_hash,
-            blend_state_hash,
-            depth_state_hash,
-            rasterizer_state_hash,
-            primitive_topology: pso.primitive_topology as u32,
+            fragment_shader: Some(pso.fragment_shader.0),
+            input_layout_hash: 0,
+            blend_state_hash: 0,
+            depth_state_hash: 0,
+            rasterizer_state_hash: 0,
+            primitive_topology: 0,
         }
     }
 }

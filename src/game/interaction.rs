@@ -1,9 +1,10 @@
 //! Interaction System for RTGC-0.8
 //! Handles player interactions with doors, vehicles, objects, NPCs
 
+use crate::game::inventory::InventoryItem;
 use crate::game::events::{publish_event, GameEvent};
 use crate::physics::physics_module::raycast_world;
-use crate::physics::{Ray, RaycastHit};
+use crate::physics::RaycastHit;
 use crate::physics::{LAYER_INTERACTABLE_DOOR, LAYER_INTERACTABLE_OBJECT, LAYER_INTERACTABLE_VEHICLE};
 use nalgebra::Vector3;
 
@@ -406,22 +407,19 @@ impl InteractionSystem {
         }
 
         // Add item to inventory if available
-        if let Some(ref inv_arc) = self.inventory {
-            if let Ok(mut inv) = inv_arc.lock() {
-                // Create a generic pickup item
-                let item_type = crate::game::inventory::ItemType::Resource {
-                    resource_type: crate::game::inventory::ResourceType::Wood,
-                    amount: 1,
-                };
-                if let Err(e) = inv.add_item(item_type, 1) {
-                    return InteractionResult {
-                        success: false,
-                        message: format!("Failed to add item: {}", e),
-                        interactable: None,
-                    };
+            if let Some(ref inv_arc) = self.inventory {
+                if let Ok(mut inv) = inv_arc.lock() {
+                    // Create a generic pickup item
+                    let item_type = crate::game::inventory::ItemType::Resource(crate::game::inventory::ResourceType::Wood);
+                    if let Err(e) = inv.add_item(InventoryItem::new("Wood", 1, item_type)) {
+                        return InteractionResult {
+                            success: false,
+                            message: format!("Failed to add item: {}", e),
+                            interactable: None,
+                        };
+                    }
                 }
             }
-        }
 
         publish_event(GameEvent::InteractionTriggered {
             interaction_type: crate::game::events::InteractionType::PickUpItem,

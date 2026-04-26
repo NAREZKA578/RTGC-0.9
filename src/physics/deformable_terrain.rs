@@ -1,6 +1,5 @@
-use crate::physics::physics_module::Shape;
-use crate::physics::RigidBody;
-use nalgebra::{Matrix3, UnitQuaternion, Vector3};
+//! Placeholder for deformable terrain (rut formation, mud)
+use nalgebra::Vector3;
 
 /// Interface for deformable terrain operations
 /// This trait defines the contract for terrain deformation functionality

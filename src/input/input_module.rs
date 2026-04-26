@@ -3,7 +3,7 @@
 
 use std::collections::HashMap;
 use winit::event::{ElementState, KeyEvent, MouseButton as WinitMouseButton};
-use winit::keyboard::{KeyCode, NamedKey, PhysicalKey};
+use winit::keyboard::{KeyCode, PhysicalKey};
 
 pub use crate::input::mapping::{InputAction, InputMapping, MouseButton};
 // DEBUG: Импорт Gamepad из mod.rs
@@ -218,6 +218,22 @@ impl InputState {
         let physical_key = PhysicalKey::Code(key_code);
         matches!(
             self.key_states.get(&physical_key),
+            Some(ActionState::JustPressed | ActionState::Held)
+        )
+    }
+
+    /// Check if a mouse button is just pressed
+    pub fn is_mouse_button_just_pressed(&self, button: MouseButton) -> bool {
+        matches!(
+            self.mouse_states.get(&button),
+            Some(ActionState::JustPressed)
+        )
+    }
+
+    /// Check if a mouse button is held
+    pub fn is_mouse_button_down(&self, button: MouseButton) -> bool {
+        matches!(
+            self.mouse_states.get(&button),
             Some(ActionState::JustPressed | ActionState::Held)
         )
     }

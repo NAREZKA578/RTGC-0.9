@@ -3,15 +3,16 @@
 //! Использует ортографическую проекцию, батчинг спрайтов
 
 use crate::graphics::rhi::{
-    IDevice, ICommandList, ResourceHandle, BufferDesc, BufferType, BufferUsage,
+    IDevice, ResourceHandle, BufferDesc, BufferType, BufferUsage,
     ShaderDescription, ShaderStage, InputLayout, VertexAttribute, VertexFormat,
     PrimitiveTopology, RasterizerState, DepthState, ColorBlendState, BlendOp,
     BlendMode, PipelineStateObject, CompareFunc, CullMode, FrontFace, FillMode,
-    StencilState,
+    StencilState, IndexFormat, ResourceState, CommandListGuard, TextureFormat,
 };
 use crate::graphics::renderer::commands::UiCommand;
 use crate::graphics::font::FontAtlas;
 use nalgebra::Matrix4;
+use parking_lot::Mutex;
 use std::sync::Arc;
 use tracing;
 
@@ -23,6 +24,8 @@ pub struct UiVertex {
     pub uv: [f32; 2],
     pub color: [f32; 4],
 }
+
+unsafe impl bytemuck::NoUninit for UiVertex {}
 
 impl UiVertex {
     pub fn new(position: [f32; 2], uv: [f32; 2], color: [f32; 4]) -> Self {
@@ -49,7 +52,7 @@ pub struct UIRenderer {
 }
 
 impl UIRenderer {
-    pub fn new(device: Arc<dyn IDevice>, width: u32, height: u32) -> Self {
+    pub fn new(device: Arc<dyn IDevice>) -> Self {
         const MAX_VERTICES: usize = 65536;
         const MAX_INDICES: usize = 65536;
         
@@ -58,13 +61,14 @@ impl UIRenderer {
             vertex_buffer: None,
             index_buffer: None,
             pipeline: None,
+            uniform_buffer: None,
             vertices: Vec::with_capacity(MAX_VERTICES),
             indices: Vec::with_capacity(MAX_INDICES),
             max_vertices: MAX_VERTICES,
             max_indices: MAX_INDICES,
             ortho_matrix: Matrix4::identity(),
-            width,
-            height,
+            width: 1280,
+            height: 720,
             font: None,
         }
     }
@@ -107,9 +111,9 @@ impl UIRenderer {
         // Структура UiVertex: position(2 floats) + uv(2 floats) + color(4 floats) = 8 floats = 32 bytes
         let input_layout = InputLayout {
             attributes: vec![
-                VertexAttribute { name: "aPos".to_string(), format: VertexFormat::Float32x2, offset: 0, location: 0 },
-                VertexAttribute { name: "aUV".to_string(), format: VertexFormat::Float32x2, offset: 8, location: 1 },
-                VertexAttribute { name: "aColor".to_string(), format: VertexFormat::Float32x4, offset: 16, location: 2 },
+                VertexAttribute { name: "aPos".to_string(), format: VertexFormat::Float32x2, offset: 0, location: 0, buffer_slot: 0, semantic: String::new() },
+                VertexAttribute { name: "aUV".to_string(), format: VertexFormat::Float32x2, offset: 8, location: 1, buffer_slot: 0, semantic: String::new() },
+                VertexAttribute { name: "aColor".to_string(), format: VertexFormat::Float32x4, offset: 16, location: 2, buffer_slot: 0, semantic: String::new() },
             ],
             stride: 32,
         };
@@ -117,37 +121,53 @@ impl UIRenderer {
         // 3. Настройка блендинга для прозрачности UI
         let blend_state = ColorBlendState {
             enabled: true,
-            src_color_blend: BlendMode::SrcAlpha,
-            dst_color_blend: BlendMode::OneMinusSrcAlpha,
-            color_blend_op: BlendOp::Add,
-            src_alpha_blend: BlendMode::One,
-            dst_alpha_blend: BlendMode::Zero,
-            alpha_blend_op: BlendOp::Add,
-            write_mask: 0xF, // Enable all channels (RGBA)
+            logic_op_enable: false,
+            src_blend: BlendMode::SrcAlpha,
+            dst_blend: BlendMode::InvSrcAlpha,
+            blend_op: BlendOp::Add,
+            src_blend_alpha: BlendMode::One,
+            dst_blend_alpha: BlendMode::Zero,
+            blend_op_alpha: BlendOp::Add,
+            logic_op: BlendOp::Add,
+            render_target_write_mask: 0xF,
         };
 
         // 4. Создание PSO
-        let pso_desc = PipelineStateObject {
+let pso_desc = PipelineStateObject {
             vertex_shader,
-            fragment_shader: Some(fragment_shader),
+            fragment_shader,
             compute_shader: None,
+            geometry_shader: None,
+            hull_shader: None,
+            domain_shader: None,
             input_layout,
-            color_blend_states: vec![blend_state],
+            primitive_topology: PrimitiveTopology::TriangleList,
+            rasterizer_state: RasterizerState {
+                cull_mode: CullMode::None,
+                fill_mode: FillMode::Solid,
+                front_face: FrontFace::CounterClockwise,
+                front_counter_clockwise: true,
+                depth_bias: 0.0,
+                depth_bias_clamp: 0.0,
+                slope_scaled_depth_bias: 0.0,
+                depth_clip_enable: true,
+                scissor_enable: false,
+                multisample_enable: false,
+                antialiased_line_enable: false,
+            },
             depth_state: DepthState {
                 enabled: false,
                 write_enabled: false,
                 compare_func: CompareFunc::Always,
             },
+            blend_state: blend_state.clone(),
             stencil_state: StencilState::default(),
-            rasterizer_state: RasterizerState {
-                cull_mode: CullMode::None,
-                front_face: FrontFace::CounterClockwise,
-                fill_mode: FillMode::Solid,
-                polygon_offset_factor: 0.0,
-                polygon_offset_units: 0.0,
-            },
-            primitive_topology: PrimitiveTopology::TriangleList,
+            color_blend_states: vec![blend_state],
+            num_render_targets: 1,
+            render_target_formats: [TextureFormat::Rgba8Unorm; 8],
+            depth_stencil_format: TextureFormat::Depth32Float,
             sample_count: 1,
+            sample_quality: 0,
         };
 
         self.pipeline = Some(self.device.create_pipeline_state(&pso_desc)
@@ -158,6 +178,7 @@ impl UIRenderer {
             buffer_type: BufferType::Uniform,
             size: 64, // 4x4 matrix = 16 floats = 64 bytes
             usage: BufferUsage::CONSTANT_BUFFER,
+            initial_state: ResourceState::ConstantBuffer,
             initial_data: None,
         };
         
@@ -171,6 +192,7 @@ impl UIRenderer {
             buffer_type: BufferType::Vertex,
             size: (self.max_vertices * std::mem::size_of::<UiVertex>()) as u64,
             usage: BufferUsage::VERTEX_BUFFER,
+            initial_state: ResourceState::VertexBuffer,
             initial_data: None,
         };
         
@@ -184,7 +206,7 @@ impl UIRenderer {
             buffer_type: BufferType::Index,
             size: (self.max_indices * std::mem::size_of::<u16>()) as u64,
             usage: BufferUsage::INDEX_BUFFER,
-            initial_data: None,
+            ..Default::default()
         };
         
         self.index_buffer = Some(
@@ -212,15 +234,16 @@ impl UIRenderer {
         
         // Записываем матрицу в uniform буфер
         if let Some(ub) = self.uniform_buffer {
-            let matrix_data = bytemuck::bytes_of(&self.ortho_matrix);
-            if let Err(e) = self.device.update_buffer(ub, 0, matrix_data) {
+            let matrix_slice = self.ortho_matrix.as_slice();
+            let bytes: Vec<u8> = matrix_slice.iter().flat_map(|&v| v.to_le_bytes()).collect();
+            if let Err(e) = self.device.update_buffer(ub, 0, &bytes) {
                 tracing::error!("Failed to update UI uniform buffer: {:?}", e);
             }
         }
     }
     
     /// Рендерит UI команды через command list
-    pub fn render(&mut self, commands: &[UiCommand], cmd_list: &mut dyn ICommandList) -> Result<(), String> {
+    pub fn render(&mut self, commands: &[UiCommand], cmd_list: &CommandListGuard) -> Result<(), String> {
         self.vertices.clear();
         self.indices.clear();
         
@@ -235,8 +258,10 @@ impl UIRenderer {
                     self.add_rect(*position, *size, *color, Some((*texture, uv)));
                 }
                 UiCommand::Text { text, position, font_size, color } => {
+                    // Extract font first to avoid borrow conflict
                     if let Some(ref font) = self.font {
-                        self.add_text(text, *position, *font_size, *color, font);
+                        let font_clone = font.clone();
+                        self.add_text(text, *position, *font_size, *color, &font_clone);
                     } else {
                         tracing::warn!("UI Text requested but no font set: '{}'", text);
                     }
@@ -274,25 +299,28 @@ impl UIRenderer {
         
         // Устанавливаем pipeline
         let pipeline = self.pipeline.ok_or("UI pipeline not initialized")?;
-        cmd_list.set_pipeline_state(pipeline);
-        
-        // Привязываем буферы
-        cmd_list.bind_vertex_buffers(0, &[(vb, 0)]);
-        cmd_list.bind_index_buffer(ib, 0);
-        
-        // Привязываем uniform буфер с матрицей проекции (binding 0 для вершинного шейдера)
-        if let Some(ub) = self.uniform_buffer {
-            cmd_list.bind_constant_buffer(crate::graphics::rhi::ShaderStage::Vertex, 0, ub);
+        {
+            let mut cmd = cmd_list.lock();
+            cmd.set_pipeline_state(pipeline);
+            
+            // Привязываем буферы
+            cmd.bind_vertex_buffers(0, &[(vb, 0)]);
+            cmd.bind_index_buffer(ib, 0, IndexFormat::Uint16);
+            
+            // Привязываем uniform буфер с матрицей проекции (binding 0 для вершинного шейдера)
+            if let Some(ub) = self.uniform_buffer {
+                cmd.bind_constant_buffer(crate::graphics::rhi::ShaderStage::Vertex, 0, ub);
+            }
+            
+            // Выполняем draw call
+            cmd.draw_indexed(self.indices.len() as u32, 1, 0, 0, 0);
         }
-        
-        // Выполняем draw call
-        cmd_list.draw_indexed(self.indices.len() as u32, 1, 0, 0, 0);
         
         Ok(())
     }
     
     /// Добавляет прямоугольник в батч
-    fn add_rect(&mut self, pos: [f32; 2], size: [f32; 2], color: [f32; 4], texture: Option<(ResourceHandle, [f32; 4])>) {
+    pub fn add_rect(&mut self, pos: [f32; 2], size: [f32; 2], color: [f32; 4], texture: Option<(ResourceHandle, [f32; 4])>) {
         if self.vertices.len() + 4 > self.max_vertices || self.indices.len() + 6 > self.max_indices {
             tracing::warn!("UIRenderer: buffer full, flushing...");
             // В полной реализации здесь был бы flush
@@ -326,9 +354,9 @@ impl UIRenderer {
     }
     
     /// Добавляет текст в батч (генерирует прямоугольники для каждого глифа)
-    fn add_text(&mut self, text: &str, pos: [f32; 2], font_size: f32, color: [f32; 4], font: &FontAtlas) {
-        let mut cursor_x = pos[0];
-        let cursor_y = pos[1];
+    pub fn add_text(&mut self, text: &str, pos: [f32; 2], font_size: f32, color: [f32; 4], font: &FontAtlas) {
+         let mut cursor_x = pos[0];
+         let mut cursor_y = pos[1];
         
         // Масштабирование относительно размера шрифта в атласе
         let scale = font_size / font.pixel_height;
@@ -379,7 +407,7 @@ impl UIRenderer {
     }
 
     /// Рендерит экран загрузки с прогресс-баром
-    pub fn render_loading_screen(&mut self, progress: f32, message: &str, cmd_list: &mut dyn ICommandList) -> Result<(), String> {
+    pub fn render_loading_screen(&mut self, progress: f32, message: &str, cmd_list: &CommandListGuard) -> Result<(), String> {
         self.vertices.clear();
         self.indices.clear();
 
@@ -432,22 +460,23 @@ impl UIRenderer {
                 .map_err(|e| format!("Failed to update UI index buffer: {:?}", e))?;
 
             let pipeline = self.pipeline.ok_or("UI pipeline not initialized")?;
-            cmd_list.set_pipeline_state(pipeline);
-            cmd_list.bind_vertex_buffers(0, &[(vb, 0)]);
-            cmd_list.bind_index_buffer(ib, 0);
+            let mut cmd = cmd_list.lock();
+            cmd.set_pipeline_state(pipeline);
+            cmd.bind_vertex_buffers(0, &[(vb, 0)]);
+            cmd.bind_index_buffer(ib, 0, IndexFormat::Uint16);
 
             if let Some(ub) = self.uniform_buffer {
-                cmd_list.bind_constant_buffer(crate::graphics::rhi::ShaderStage::Vertex, 0, ub);
+                cmd.bind_constant_buffer(crate::graphics::rhi::ShaderStage::Vertex, 0, ub);
             }
 
-            cmd_list.draw_indexed(self.indices.len() as u32, 1, 0, 0, 0);
+            cmd.draw_indexed(self.indices.len() as u32, 1, 0, 0, 0);
         }
 
         Ok(())
     }
 
     /// Простая версия add_text без шрифта (заглушка для системного текста)
-    fn add_text_simple(&mut self, text: &str, pos: [f32; 2], font_size: f32, color: [f32; 4]) {
+    pub fn add_text_simple(&mut self, text: &str, pos: [f32; 2], font_size: f32, color: [f32; 4]) {
         // Если шрифт не установлен, рисуем простой прямоугольник вместо текста
         // В полной реализации здесь будет использование FontAtlas
         if self.font.is_none() {
@@ -456,7 +485,9 @@ impl UIRenderer {
             let height = font_size * 0.8;
             self.add_rect([pos[0], pos[1] - height], [width, height], color, None);
         } else if let Some(ref font) = self.font {
-            self.add_text(text, pos, font_size, color, font);
+            // Clone font to avoid borrow conflict
+            let font_clone = font.clone();
+            self.add_text(text, pos, font_size, color, &font_clone);
         }
     }
 

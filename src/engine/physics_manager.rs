@@ -5,8 +5,7 @@
 
 use crate::error::EngineError;
 use crate::physics::{Helicopter, PhysicsWorld, TrackedVehicle, Vehicle};
-use nalgebra::Vector3;
-use tracing::{error, warn};
+use tracing::warn;
 
 /// Менеджер физических объектов
 pub struct PhysicsManager {

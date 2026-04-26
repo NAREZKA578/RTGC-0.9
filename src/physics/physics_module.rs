@@ -13,7 +13,6 @@ pub use super::spatial_hash::SpatialHash;
 pub use super::thread_pool::ThreadPool;
 pub use super::vehicle::{Vehicle, VehicleConfig, VehicleControls, WheelState};
 use nalgebra::{Isometry3, Matrix3, Point3, UnitQuaternion, Vector3};
-use std::collections::HashMap;
 use tracing;
 
 // Collision layers (B4)
@@ -1276,12 +1275,12 @@ impl PhysicsWorld {
             let r_b_cross_n = r_b.cross(&normal);
 
             // Calculate inverse moments of inertia
-            let inv_I_a = if body_a.is_static {
+            let inv_i_a = if body_a.is_static {
                 Matrix3::zeros()
             } else {
                 body_a.inverse_inertia_tensor
             };
-            let inv_I_b = if body_b.is_static {
+            let inv_i_b = if body_b.is_static {
                 Matrix3::zeros()
             } else {
                 body_b.inverse_inertia_tensor
@@ -1289,8 +1288,8 @@ impl PhysicsWorld {
 
             // Calculate impulse magnitude
             let term1 = inv_mass_a + inv_mass_b;
-            let term2 = (inv_I_a * r_a_cross_n).cross(&r_a).dot(&normal);
-            let term3 = (inv_I_b * r_b_cross_n).cross(&r_b).dot(&normal);
+            let term2 = (inv_i_a * r_a_cross_n).cross(&r_a).dot(&normal);
+            let term3 = (inv_i_b * r_b_cross_n).cross(&r_b).dot(&normal);
             let denominator = term1 + term2 + term3;
 
             if denominator == 0.0 {
@@ -1919,8 +1918,8 @@ impl PhysicsWorld {
         let test_axes: Vec<(Vector3<f32>, f32, f32)> = (0..15)
             .map(|axis_idx| {
                 let mut axis: Vector3<f32>;
-                let mut ra: f32;
-                let mut rb: f32;
+                let ra: f32;
+                let rb: f32;
 
                 if axis_idx < 3 {
                     // Оси из A
@@ -2160,7 +2159,7 @@ impl PhysicsWorld {
         // Transform box to capsule's local coordinate system for easier computation
         let box_transform = box_body.get_world_transform();
         let inv_capsule_transform = capsule_transform.inverse();
-        let box_in_capsule_space = inv_capsule_transform * box_transform;
+        let _box_in_capsule_space = inv_capsule_transform * box_transform;
 
         // Find the closest point on the capsule segment to the box
         // This is a simplified approach - a full solution would involve more complex geometry
@@ -2344,20 +2343,20 @@ impl PhysicsWorld {
 
         if a <= f32::EPSILON {
             // First segment is degenerate (point)
-            let s = 0.0;
-            let t = f.clamp(0.0, e) / e;
-            (start_a, start_b + d2 * t)
+            let _s = 0.0;
+            let _t = f.clamp(0.0, e) / e;
+            (start_a, start_b + d2 * _t)
         } else if e <= f32::EPSILON {
             // Second segment is degenerate (point)
-            let t = 0.0;
-            let s = (-c).clamp(0.0, a) / a;
-            (start_a + d1 * s, start_b)
+            let _t = 0.0;
+            let _s = (-c).clamp(0.0, a) / a;
+            (start_a + d1 * _s, start_b)
         } else {
             let b = d1.dot(&d2);
             let denom = a * e - b * b;
 
-            let mut s = 0.0;
-            let mut t = 0.0;
+            let mut s: f32;
+            let mut t: f32;
 
             if denom > f32::EPSILON {
                 s = (b * f - c * e).clamp(0.0, denom) / denom;
@@ -2535,7 +2534,7 @@ impl PhysicsWorld {
                 let hit_coords = hit_point.coords;
                 let abs_x = hit_coords.x.abs();
                 let abs_y = hit_coords.y.abs();
-                let abs_z = hit_coords.z.abs();
+                let _abs_z = hit_coords.z.abs();
 
                 let normal = if (abs_x - half_extents.x).abs() < 0.001 {
                     Vector3::new(hit_coords.x.signum(), 0.0, 0.0)
@@ -2584,15 +2583,15 @@ impl PhysicsWorld {
         let e = seg_dir.dot(&w);
 
         let denom = a * c - b * b;
-        let mut ray_t = 0.0;
+        let _ray_t: f32;
         let mut seg_t = 0.0;
 
         if denom < 0.0001 {
             // Lines are parallel
-            ray_t = 0.0;
+            _ray_t = 0.0;
             seg_t = e / c;
         } else {
-            ray_t = (b * e - c * d) / denom;
+            _ray_t = (b * e - c * d) / denom;
             seg_t = (a * e - b * d) / denom;
         }
 

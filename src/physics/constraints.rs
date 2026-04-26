@@ -6,7 +6,7 @@
 //! - При обнаружении некорректных значений применяется безопасное состояние
 
 use crate::physics::physics_module::PhysicsWorld;
-use nalgebra::{Point3, Vector3};
+use nalgebra::{Isometry3, Point3, UnitQuaternion, Vector3};
 
 /// Spring constraint for vehicle suspension (B1)
 #[derive(Debug, Clone)]
@@ -305,7 +305,7 @@ impl PhysicsWorld {
     }
 
     /// Solve all spring constraints
-    pub fn solve_spring_constraints(&mut self, dt: f32) {
+    pub fn solve_spring_constraints(&mut self, _dt: f32) {
         let mut constraints_to_apply: Vec<(usize, Vector3<f32>)> = Vec::new();
 
         for constraint in &self.spring_constraints {

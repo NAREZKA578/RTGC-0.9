@@ -45,9 +45,9 @@ impl VkDescriptorSet {
         };
 
         Ok(Self {
-            pool,
-            max_sets,
-            allocated_sets: Vec::new(),
+            descriptor_set: descriptor_sets[0],
+            layout,
+            bindings: Vec::new(),
         })
     }
 
@@ -57,8 +57,6 @@ impl VkDescriptorSet {
             "Vulkan feature not enabled".to_string(),
         ))
     }
-
-    /// Update descriptor set with a uniform buffer
     #[cfg(feature = "vulkan")]
     pub fn update_uniform_buffer(
         &mut self,

@@ -10,7 +10,7 @@ impl Rng {
     /// Create a new RNG with a seed
     pub fn new(seed: u64) -> Self {
         // Initialize state using seed
-        let mut state = [
+        let state = [
             seed.wrapping_add(0x1234567890abcdef),
             seed.wrapping_add(0xfedcba0987654321),
             seed.wrapping_add(0xabcdef1234567890),

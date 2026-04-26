@@ -1,4 +1,4 @@
-use ab_glyph::{Font, FontRef, Glyph, ScaleFont};
+use ab_glyph::{Font, FontRef, PxScale, ScaleFont};
 use crate::graphics::rhi::ResourceHandle;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -17,14 +17,14 @@ pub struct FontAtlas {
     /// Кэш загруженных глифов (по Unicode скаляру)
     glyphs: HashMap<char, GlyphData>,
     /// Размер шрифта в пикселях (высота)
-    pixel_height: f32,
+    pub pixel_height: f32,
     /// Текстура атласа (заполняется при инициализации в RHI)
     pub texture: Option<ResourceHandle>,
     /// Данные пикселей атласа (RGBA)
     atlas_data: Vec<u8>,
     /// Размеры атласа
-    atlas_width: u32,
-    atlas_height: u32,
+    pub atlas_width: u32,
+    pub atlas_height: u32,
     /// Владелец данных шрифта (для поддержания времени жизни)
     _font_data: Vec<u8>,
 }
@@ -32,7 +32,7 @@ pub struct FontAtlas {
 impl FontAtlas {
     /// Загрузить шрифт из файла TTF/OTF
     pub fn load_from_file(path: &str, pixel_height: f32) -> Result<Self, String> {
-        let mut font_bytes = std::fs::read(path)
+        let font_bytes = std::fs::read(path)
             .map_err(|e| format!("Failed to read font file {}: {}", path, e))?;
         
         // Создаём FontRef из вектора байтов
@@ -41,7 +41,8 @@ impl FontAtlas {
         let font = FontRef::try_from_slice(font_data)
             .map_err(|e| format!("Failed to parse font: {}", e))?;
         
-        let scaled_font = font.as_scaled(pixel_height);
+        let scale = PxScale::from(pixel_height);
+        let scaled_font = font.as_scaled(scale);
         
         // Предварительный расчет размеров атласа
         // Для простоты создадим фиксированный атлас 512x512 для ASCII + Cyrillic
@@ -63,14 +64,28 @@ impl FontAtlas {
             .chain(1024..1104)
             .filter_map(std::char::from_u32)
             .collect();
-            
+        
+        // Create a question mark glyph for fallback
+        let qmark_id = font.glyph_id('?');
+        
         for ch in chars {
-            let glyph = scaled_font.outlined_glyph(ch).unwrap_or_else(|| {
-                // Если глиф не найден, используем вопросительный знак или пустой
-                scaled_font.outlined_glyph('?').unwrap()
-            });
+            let glyph_id = font.glyph_id(ch);
+            let glyph = glyph_id.with_scale_and_position(scale, ab_glyph::point(0.0, 0.0));
             
-            let bounds = glyph.px_bounds();
+            let outlined = font.outline_glyph(glyph);
+            
+            let bounds = match outlined {
+                Some(ref o) => o.px_bounds(),
+                None => {
+                    // Fallback to question mark
+                    let qmark_glyph = qmark_id.with_scale_and_position(scale, ab_glyph::point(0.0, 0.0));
+                    match font.outline_glyph(qmark_glyph) {
+                        Some(q) => q.px_bounds(),
+                        None => continue,
+                    }
+                }
+            };
+            
             let width = bounds.width() as u32;
             let height = bounds.height() as u32;
             
@@ -78,7 +93,7 @@ impl FontAtlas {
                 // Пустой глиф (например, пробел)
                 glyphs.insert(ch, GlyphData {
                     uv_rect: [0.0, 0.0, 0.0, 0.0],
-                    advance: scaled_font.h_advance(glyph.id()) / pixel_height,
+                    advance: scaled_font.h_advance(glyph_id) / pixel_height,
                     offset: [0.0, 0.0],
                 });
                 continue;
@@ -98,19 +113,21 @@ impl FontAtlas {
             row_max_height = row_max_height.max(height);
             
             // Растеризация глифа в атлас
-            glyph.draw(|gx, gy, v| {
-                let px_x = (bounds.min.x as u32 + gx) as usize;
-                let px_y = (bounds.min.y as u32 + gy) as usize;
-                
-                if px_x < atlas_width as usize && px_y < atlas_height as usize {
-                    let idx = (px_y * atlas_width as usize + px_x) * 4;
-                    // Alpha channel only (white glyph)
-                    atlas_data[idx] = 255;
-                    atlas_data[idx + 1] = 255;
-                    atlas_data[idx + 2] = 255;
-                    atlas_data[idx + 3] = (v * 255.0) as u8;
-                }
-            });
+            if let Some(outlined_glyph) = outlined {
+                outlined_glyph.draw(|gx, gy, v| {
+                    let px_x = (bounds.min.x as u32 + gx) as usize;
+                    let px_y = (bounds.min.y as u32 + gy) as usize;
+                    
+                    if px_x < atlas_width as usize && px_y < atlas_height as usize {
+                        let idx = (px_y * atlas_width as usize + px_x) * 4;
+                        // Alpha channel only (white glyph)
+                        atlas_data[idx] = 255;
+                        atlas_data[idx + 1] = 255;
+                        atlas_data[idx + 2] = 255;
+                        atlas_data[idx + 3] = (v * 255.0) as u8;
+                    }
+                });
+            }
             
             // Сохранение данных глифа
             let u = x as f32 / atlas_width as f32;
@@ -120,7 +137,7 @@ impl FontAtlas {
             
             glyphs.insert(ch, GlyphData {
                 uv_rect: [u, v, w, h],
-                advance: scaled_font.h_advance(glyph.id()) / pixel_height,
+                advance: scaled_font.h_advance(glyph_id) / pixel_height,
                 offset: [
                     bounds.min.x as f32 / pixel_height,
                     bounds.min.y as f32 / pixel_height,
@@ -149,8 +166,15 @@ impl FontAtlas {
     
     /// Получить размеры текста (ширина, высота)
     pub fn measure_text(&self, text: &str) -> (f32, f32) {
-        let scaled_font = self.font.as_scaled(self.pixel_height);
-        let width = scaled_font.horizontal_advance(scaled_font.scale_px_glyphs(text));
+        let scale = PxScale::from(self.pixel_height);
+        let scaled_font = self.font.as_scaled(scale);
+        
+        let mut width = 0.0f32;
+        for ch in text.chars() {
+            let gid = self.font.glyph_id(ch);
+            width += scaled_font.h_advance(gid);
+        }
+        
         let height = self.pixel_height;
         (width, height)
     }

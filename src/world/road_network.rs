@@ -6,12 +6,11 @@
 //! - B-spline smoothing for natural curves
 //! - Integration with terrain generation
 
-use nalgebra::{Vector2, Vector3};
+use nalgebra::Vector2;
 use rand::{Rng, SeedableRng};
 use rand::prelude::SliceRandom;
 use rand_chacha::ChaCha8Rng;
-use std::collections::{HashMap, HashSet, BinaryHeap};
-use std::cmp::Ordering;
+use std::collections::{HashMap, HashSet};
 
 use super::settlement::{Settlement, SettlementType};
 
@@ -422,7 +421,7 @@ impl RoadNetwork {
         for settlement in settlements.iter() {
             if rng.gen_bool(0.3) {
                 // 30% chance for extra connection
-                let mut candidates: Vec<_> = settlements.iter()
+                let candidates: Vec<_> = settlements.iter()
                     .filter(|s| s.id != settlement.id)
                     .collect();
                 
@@ -504,8 +503,8 @@ impl RoadNetwork {
             let offset_z = (rng.gen::<f32>() - 0.5) * curve_amount;
             
             // Sample terrain height and adjust to avoid steep slopes
-            let mut x = base_x + offset_x;
-            let mut z = base_z + offset_z;
+            let x = base_x + offset_x;
+            let z = base_z + offset_z;
             
             waypoints.push((x, z));
         }
