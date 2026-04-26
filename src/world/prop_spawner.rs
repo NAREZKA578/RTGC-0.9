@@ -1,4 +1,4 @@
-//! Prop Spawner for RTGC-0.8
+//! Prop Spawner for RTGC-0.9
 //! Расстановка объектов на террейне (деревья, здания, камни и т.д.)
 
 use nalgebra::Vector3;

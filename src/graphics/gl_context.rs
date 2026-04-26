@@ -21,17 +21,17 @@ pub struct GlContext {
 }
 
 #[cfg(windows)]
-unsafe fn win32_loader(name: &str) -> *mut std::ffi::c_void {
+unsafe fn win32_loader(name: &str) -> *mut std::ffi::c_void { unsafe {
     use std::ffi::CString;
     use std::os::raw::c_char;
     
-    extern "system" {
+    unsafe extern "system" {
         fn wglGetProcAddress(lpProcName: *const c_char) -> *mut std::ffi::c_void;
     }
     
     let name_c = CString::new(name).unwrap();
     wglGetProcAddress(name_c.as_ptr())
-}
+}}
 
 #[cfg(not(windows))]
 unsafe fn win32_loader(name: &str) -> *mut std::ffi::c_void {

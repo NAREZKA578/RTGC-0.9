@@ -616,10 +616,10 @@ mod tests {
     
     #[test]
     fn test_biome_selection() {
-        let gen = TerrainGenerator::new(NoiseConfig::default());
+        let r#gen = TerrainGenerator::new(NoiseConfig::default());
         
         // Low height should be ocean/beach
-        let biome = gen.get_biome(0.0, 0.0);
+        let biome = r#gen.get_biome(0.0, 0.0);
         assert!(!biome.name.is_empty());
     }
 }

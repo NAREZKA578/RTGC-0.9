@@ -1,4 +1,4 @@
-//! Chunk Manager for RTGC-0.8
+//! Chunk Manager for RTGC-0.9
 //! Менеджер жизненного цикла чанков
 
 use crate::world::chunk::Chunk;

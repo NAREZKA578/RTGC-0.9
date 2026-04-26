@@ -1,8 +1,17 @@
 //! Physics - Vehicle physics simulation
 
 use crate::physics::physics_module::RigidBody;
-use crate::physics::SurfaceType;
-use nalgebra::{Matrix3, UnitQuaternion, Vector3};
+use crate::world::SurfaceType;
+use nalgebra::{UnitQuaternion, Vector3};
+
+pub const DEFAULT_CHASSIS_WIDTH: f32 = 0.9;
+pub const DEFAULT_CHASSIS_HEIGHT: f32 = 0.3;
+pub const DEFAULT_CHASSIS_LENGTH: f32 = 2.25;
+
+pub const DEFAULT_WHEEL_FRONT_LEFT: Vector3<f32> = Vector3::new(1.0, -0.5, 0.8);
+pub const DEFAULT_WHEEL_FRONT_RIGHT: Vector3<f32> = Vector3::new(1.0, -0.5, -0.8);
+pub const DEFAULT_WHEEL_REAR_LEFT: Vector3<f32> = Vector3::new(-1.0, -0.5, 0.8);
+pub const DEFAULT_WHEEL_REAR_RIGHT: Vector3<f32> = Vector3::new(-1.0, -0.5, -0.8);
 
 /// Vehicle configuration
 #[derive(Debug, Clone)]
@@ -93,19 +102,19 @@ impl WheelState {
     }
 
     pub fn front_left(_config: &VehicleConfig) -> Self {
-        Self::new(Vector3::new(1.0, -0.5, 0.8))
+        Self::new(DEFAULT_WHEEL_FRONT_LEFT)
     }
 
     pub fn front_right(_config: &VehicleConfig) -> Self {
-        Self::new(Vector3::new(1.0, -0.5, -0.8))
+        Self::new(DEFAULT_WHEEL_FRONT_RIGHT)
     }
 
     pub fn rear_left(_config: &VehicleConfig) -> Self {
-        Self::new(Vector3::new(-1.0, -0.5, 0.8))
+        Self::new(DEFAULT_WHEEL_REAR_LEFT)
     }
 
     pub fn rear_right(_config: &VehicleConfig) -> Self {
-        Self::new(Vector3::new(-1.0, -0.5, -0.8))
+        Self::new(DEFAULT_WHEEL_REAR_RIGHT)
     }
 }
 
@@ -178,7 +187,8 @@ pub struct Vehicle {
 impl Vehicle {
     /// Creates a new vehicle with the given configuration
     pub fn new(config: VehicleConfig) -> Self {
-        let body = RigidBody::new_box(Vector3::zeros(), config.mass, Vector3::new(0.9, 0.3, 2.25));
+        let chassis_dims = Vector3::new(DEFAULT_CHASSIS_WIDTH, DEFAULT_CHASSIS_HEIGHT, DEFAULT_CHASSIS_LENGTH);
+        let body = RigidBody::new_box(Vector3::zeros(), config.mass, chassis_dims);
 
         let mut wheels = Vec::with_capacity(config.wheel_count as usize);
 
@@ -681,10 +691,11 @@ impl Vehicle {
 
     /// Resets the vehicle state
     pub fn reset(&mut self) {
+        let chassis_dims = Vector3::new(DEFAULT_CHASSIS_WIDTH, DEFAULT_CHASSIS_HEIGHT, DEFAULT_CHASSIS_LENGTH);
         self.body = RigidBody::new_box(
             Vector3::zeros(),
             self.config.mass,
-            Vector3::new(0.9, 0.3, 2.25),
+            chassis_dims,
         );
 
         for wheel in &mut self.wheels {

@@ -338,16 +338,16 @@ impl SceneManager {
 
     /// Unload a scene
     pub fn unload(&mut self, scene_id: SceneId) -> bool {
-        if let Some(scene) = self.scenes.remove(&scene_id) {
+        match self.scenes.remove(&scene_id) { Some(scene) => {
             if self.active_scene == Some(scene_id) {
                 self.active_scene = None;
                 self.state = SceneState::Unloaded;
             }
             debug!("Unloaded scene {:?}", scene_id);
             true
-        } else {
+        } _ => {
             false
-        }
+        }}
     }
 
     /// Get number of loaded scenes

@@ -268,7 +268,7 @@ fn get_profiler() -> &'static LazyLock<Mutex<Profiler>> {
 
 #[macro_export]
 macro_rules! profile_scope {
-    ($name:expr, $block:block) => {{
+    ($name:expr_2021, $block:block) => {{
         let _guard = $crate::profiler::ProfileGuard::new($name);
         $block
     }};

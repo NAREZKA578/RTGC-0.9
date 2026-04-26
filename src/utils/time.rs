@@ -1,4 +1,4 @@
-//! Time utilities for RTGC-0.8
+//! Time utilities for RTGC-0.9
 //! Provides delta time calculation, fixed timestep, and FPS counter
 
 use std::time::{Duration, Instant};

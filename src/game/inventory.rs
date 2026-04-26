@@ -115,7 +115,7 @@ impl Inventory {
         }
 
         for slot in &mut self.slots {
-            if let Some(ref mut existing) = slot {
+            if let Some(existing) = slot {
                 if existing.name == item.name {
                     existing.quantity += item.quantity;
                     existing.weight = existing.weight + item.get_weight();
@@ -136,7 +136,7 @@ impl Inventory {
 
     pub fn remove_item(&mut self, id: &str, quantity: u32) -> Result<InventoryItem, String> {
         for slot in &mut self.slots {
-            if let Some(ref mut item) = slot {
+            if let Some(item) = slot {
                 if item.id == id {
                     if item.quantity <= quantity {
                         let removed = slot.take().unwrap();

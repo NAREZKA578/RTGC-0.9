@@ -1,4 +1,4 @@
-//! World Module for RTGC-0.8
+//! World Module for RTGC-0.9
 //! Provides terrain generation, chunk management, world streaming, and day/night cycle
 
 pub mod world_module;

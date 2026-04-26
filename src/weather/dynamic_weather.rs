@@ -119,7 +119,7 @@ impl Wind {
             altitude_speed: speed * 1.5, // Wind is stronger at altitude
             gustiness: 0.3,
             current_gust: 1.0,
-            turbulence_seed: rng.gen(),
+            turbulence_seed: rng.r#gen(),
         }
     }
 

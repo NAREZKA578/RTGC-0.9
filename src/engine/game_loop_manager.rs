@@ -6,6 +6,7 @@
 use crate::engine::state::EngineState;
 use crate::game::interaction::InteractionSystem;
 use crate::game::debug_menu::DebugMenu;
+use crate::physics::PhysicsWorld;
 use crate::ui::HudManager;
 use crate::graphics::particles::ParticleSystem;
 use crate::graphics::renderer::DebugRenderer;
@@ -57,6 +58,7 @@ impl GameLoopManager {
         game_state: &EngineState,
         player_position: Option<Vector3<f32>>,
         player_forward: Vector3<f32>,
+        physics_world: &PhysicsWorld,
     ) -> Result<(), Box<dyn std::error::Error>> {
         // Проверка на NaN/Inf
         if !dt.is_finite() || dt <= 0.0 {
@@ -67,7 +69,7 @@ impl GameLoopManager {
         // Обновление системы взаимодействия
         if game_state.is_playing() {
             let player_pos = player_position.unwrap_or_else(Vector3::zeros);
-            self.interaction_system.update(dt, player_pos, player_forward, 4.0);
+            self.interaction_system.update(dt, player_pos, player_forward, 4.0, physics_world);
         }
         
         // Обновление отладочного меню

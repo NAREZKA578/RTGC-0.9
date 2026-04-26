@@ -1,4 +1,4 @@
-//! First Mission System for RTGC-0.8
+//! First Mission System for RTGC-0.9
 //! Handles the initial contract from "Серега" - tutorial mission
 
 use crate::game::events::{publish_event, GameEvent};

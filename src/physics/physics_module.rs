@@ -2987,48 +2987,7 @@ impl PhysicsWorld {
     }
 }
 
-/// Global physics world reference for raycast queries.
-/// SAFETY: This static mutable variable is used only for read-only raycast queries.
-/// The pointer is set once during initialization and never modified afterwards.
-/// Access is synchronized by the main thread which owns the PhysicsWorld lifetime.
-static mut GLOBAL_PHYSICS_WORLD: Option<*const PhysicsWorld> = None;
-
-/// Set the global physics world pointer for raycast queries.
-/// # Safety
-/// This function must be called only once during initialization from the main thread.
-/// The `world` reference must outlive all uses of `raycast_world`.
-pub fn set_global_physics_world(world: &PhysicsWorld) {
-    unsafe {
-        GLOBAL_PHYSICS_WORLD = Some(world as *const PhysicsWorld);
-    }
-}
-
-/// Global raycast function for interaction system.
-/// Returns the first hit along the ray, or None if no hit occurred.
-pub fn raycast_world(
-    origin: nalgebra::Vector3<f32>,
-    direction: nalgebra::Vector3<f32>,
-    max_distance: f32,
-) -> Option<RaycastHit> {
-    unsafe {
-        if let Some(world_ptr) = GLOBAL_PHYSICS_WORLD {
-            let world = &*world_ptr;
-            let ray = Ray {
-                origin: origin.into(),
-                direction,
-            };
-            world.raycast(&ray).and_then(|hit| {
-                if hit.distance <= max_distance {
-                    Some(hit)
-                } else {
-                    None
-                }
-            })
-        } else {
-            None
-        }
-    }
-}
+// Global physics world functions removed - pass PhysicsWorld reference explicitly
 
 #[derive(Debug, Clone)]
 struct Contact {

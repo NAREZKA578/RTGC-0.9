@@ -1,4 +1,4 @@
-//! OpenGL RHI Backend для RTGC-0.8 - Реализация на glow
+//! OpenGL RHI Backend для RTGC-0.9 - Реализация на glow
 
 use super::device::{
     IDevice, ICommandList, ICommandQueue, IFence, ISemaphore, ISwapChain, ResourceBarrier,

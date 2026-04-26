@@ -1,4 +1,4 @@
-//! Tracked Vehicle Physics for RTGC-0.8
+//! Tracked Vehicle Physics for RTGC-0.9
 //!
 //! Реализация гусеничной техники:
 //! - ГТ-СМ, ГАЗ-71, МТ-ЛБ, Т-150К
@@ -12,7 +12,7 @@ use std::f32::consts::PI;
 
 use super::deformable_terrain::{DeformableTerrainComponent, DeformationType};
 use super::physics_module::{Ray, RaycastHit, RigidBody};
-use super::SurfaceType;
+use crate::world::SurfaceType;
 
 /// Типы гусеничной техники
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

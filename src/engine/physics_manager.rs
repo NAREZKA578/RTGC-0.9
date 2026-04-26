@@ -99,7 +99,7 @@ impl PhysicsManager {
                 vehicle.update(
                     dt,
                     |_x, _z| 0.0,
-                    |_x, _z| crate::physics::SurfaceType::default(),
+                    |_x, _z| crate::world::SurfaceType::default(),
                 );
             }
         }
@@ -129,9 +129,6 @@ impl PhysicsManager {
 
         // Шаг физического мира
         self.physics_world.step(dt);
-
-        // Обновляем глобальный physics_world для raycast
-        crate::physics::set_global_physics_world(&self.physics_world);
 
         Ok(())
     }

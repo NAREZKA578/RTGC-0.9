@@ -1,4 +1,4 @@
-//! Graphics Module for RTGC-0.8
+//! Graphics Module for RTGC-0.9
 //! Provides rendering, camera, shaders, meshes, textures, and RHI abstraction
 
 pub mod camera;
@@ -37,7 +37,6 @@ pub use sky_renderer::SkyRenderer;
 /// Универсальный графический контекст
 pub enum GraphicsContext {
     OpenGL(GlContext),
-    // DX11(dx11_context::Dx11GraphicsContext), // Закомментировано до реализации
 }
 
 impl GraphicsContext {

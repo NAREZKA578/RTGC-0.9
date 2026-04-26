@@ -109,7 +109,7 @@ impl Settlement {
 
         // Not every grid cell has a settlement
         const SETTLEMENT_DENSITY: f32 = 0.15; // 15% chance per cell
-        if rng.gen::<f32>() > SETTLEMENT_DENSITY {
+        if rng.r#gen::<f32>() > SETTLEMENT_DENSITY {
             return None;
         }
 

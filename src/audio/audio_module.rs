@@ -210,8 +210,10 @@ pub struct AudioSystem {
     max_sources: u32,
     /// Включена ли окклюзия
     occlusion_enabled: bool,
-    /// Аудио устройство вывода (not cloneable, recreated on clone)
-    _stream: Option<OutputStream>,
+    /// Аудио устройство вывода (not cloneable - only original owner holds it)
+    /// Clones set this to None as audio device cannot be shared
+    #[allow(dead_code)]
+    audio_device: Option<OutputStream>,
     /// Активный sink для воспроизведения
     sink: Option<Arc<Sink>>,
 }
@@ -230,7 +232,7 @@ impl Clone for AudioSystem {
             // The clone shares the same sink if available, but audio playback will
             // only work if the original AudioSystem is still alive and holding the stream.
             // This is a design trade-off - use AudioSystem::new() for active audio.
-            _stream: None,
+            audio_device: None,
             sink: self.sink.clone(),
         }
     }
@@ -251,7 +253,7 @@ impl AudioSystem {
                     sound_cache: Arc::new(Mutex::new(HashMap::new())),
                     max_sources: 64,
                     occlusion_enabled: true,
-                    _stream: None,
+                    audio_device: None,
                     sink: None,
                 });
             }
@@ -269,7 +271,7 @@ impl AudioSystem {
                     sound_cache: Arc::new(Mutex::new(HashMap::new())),
                     max_sources: 64,
                     occlusion_enabled: true,
-                    _stream: Some(stream),
+                    audio_device: Some(stream),
                     sink: None,
                 });
             }
@@ -283,7 +285,7 @@ impl AudioSystem {
             sound_cache: Arc::new(Mutex::new(HashMap::new())),
             max_sources: 64,
             occlusion_enabled: true,
-            _stream: Some(stream),
+            audio_device: Some(stream),
             sink: Some(Arc::new(sink)),
         })
     }
@@ -315,15 +317,15 @@ impl AudioSystem {
     /// Воспроизводит звук из файла
     pub fn play_sound(&self, sound_path: &str) {
         if let Some(sink) = &self.sink {
-            if let Ok(file) = std::fs::File::open(sound_path) {
-                if let Ok(source) = rodio::Decoder::new(file) {
+            match std::fs::File::open(sound_path) { Ok(file) => {
+                match rodio::Decoder::new(file) { Ok(source) => {
                     sink.append(source);
-                } else {
+                } _ => {
                     tracing::warn!("Failed to decode sound file: {}", sound_path);
-                }
-            } else {
+                }}
+            } _ => {
                 tracing::warn!("Failed to open sound file: {}", sound_path);
-            }
+            }}
         }
     }
 
@@ -572,7 +574,7 @@ impl Default for AudioSystem {
                 sound_cache: Arc::new(Mutex::new(HashMap::new())),
                 max_sources: 64,
                 occlusion_enabled: true,
-                _stream: None,
+                audio_device: None,
                 sink: None,
             }
         })

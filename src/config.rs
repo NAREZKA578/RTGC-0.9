@@ -10,6 +10,11 @@ use tracing::info;
 
 type ConfigResult = std::result::Result<(), ConfigError>;
 
+pub const DEFAULT_TARGET_FPS: f32 = 60.0;
+pub const DEFAULT_FRAME_TIME_CLAMP: f32 = 0.1;
+pub const DEFAULT_WINDOW_WIDTH: u32 = 1280;
+pub const DEFAULT_WINDOW_HEIGHT: u32 = 720;
+
 /// Main configuration structure containing all subsystem configs
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
@@ -66,7 +71,7 @@ impl Config {
         // Validate before saving
         self.validate()?;
 
-        let content = serde_json::to_string_pretty(self).map_err(|e| {
+        let content = toml::to_string_pretty(self).map_err(|e| {
             ConfigError::SerializationError(format!("Failed to serialize config: {}", e))
         })?;
         let path_ref = path.as_ref();
@@ -196,6 +201,7 @@ pub struct PhysicsConfig {
     pub enable_ccd: bool,
     pub thread_count: u32,
     pub async_physics: bool,
+    pub timestep: f32,
 }
 
 impl PhysicsConfig {
@@ -249,6 +255,14 @@ impl PhysicsConfig {
             )));
         }
 
+        // Validate timestep
+        if self.timestep <= 0.0 || self.timestep > 1.0 {
+            return Err(ConfigError::InvalidValue(format!(
+                "timestep must be between 0.0 and 1.0, got {}",
+                self.timestep
+            )));
+        }
+
         Ok(())
     }
 }
@@ -270,6 +284,7 @@ impl Default for PhysicsConfig {
             enable_ccd: true,
             thread_count,
             async_physics: true,
+            timestep: 1.0 / 60.0,
         }
     }
 }
@@ -517,8 +532,8 @@ mod tests {
     #[test]
     fn test_config_serialization() {
         let config = Config::default();
-        let json = serde_json::to_string(&config).expect("Failed to serialize config");
-        let loaded: Config = serde_json::from_str(&json).expect("Failed to deserialize config");
+        let toml_string = toml::to_string(&config).expect("Failed to serialize config");
+        let loaded: Config = toml::from_str(&toml_string).expect("Failed to deserialize config");
         assert_eq!(config.graphics.window_width, loaded.graphics.window_width);
     }
 }

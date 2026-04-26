@@ -79,17 +79,23 @@ impl EngineSubsystems {
     }
 
     /// Обновляет все подсистемы
-pub fn update(&mut self, dt: f32) {
+    pub fn update(&mut self, dt: f32) {
         self.graphics.update(dt);
         self.physics.update(dt);
-        self.ui.hud_manager.update(&crate::ui::hud::VehicleHudData::default(), &crate::ui::hud::HudLayout::default(), dt);
         self.ui.ui_manager.update(dt);
         self.world.update(dt);
         self.ecs.update(dt);
     }
+
+    /// Обновляет HUD с реальными данными (вызывается отдельно с контекстом)
+    pub fn update_hud(&mut self, vehicle_data: &crate::ui::hud::VehicleHudData, layout: &crate::ui::hud::HudLayout, dt: f32) {
+        self.ui.hud_manager.update(vehicle_data, layout, dt);
+    }
 }
 
 /// Графическая подсистема
+/// Clone intentionally excludes renderer since it contains non-clonable GPU resources.
+/// Use clone_without_renderer() to get a copy for thread-safe sharing.
 pub struct GraphicsSubsystem {
     pub renderer: Option<Renderer>,
     pub material_manager: MaterialManager,
@@ -100,7 +106,19 @@ pub struct GraphicsSubsystem {
 impl Clone for GraphicsSubsystem {
     fn clone(&self) -> Self {
         Self {
-            renderer: None, // Can't clone Renderer
+            renderer: None,
+            material_manager: self.material_manager.clone(),
+            particle_system: self.particle_system.clone(),
+            debug_renderer: self.debug_renderer.clone(),
+        }
+    }
+}
+
+impl GraphicsSubsystem {
+    /// Creates a clone that excludes the renderer (for thread-safe sharing)
+    pub fn clone_without_renderer(&self) -> Self {
+        Self {
+            renderer: None,
             material_manager: self.material_manager.clone(),
             particle_system: self.particle_system.clone(),
             debug_renderer: self.debug_renderer.clone(),

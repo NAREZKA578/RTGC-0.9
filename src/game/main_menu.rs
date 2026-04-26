@@ -66,8 +66,8 @@ impl MainMenu {
             buttons: Vec::new(),
             font: None,
             mouse_position: [0.0, 0.0],
-            title_text: "RTGC-0.8".to_string(),
-            version_text: "v0.8.0".to_string(),
+            title_text: "RTGC-0.9".to_string(),
+            version_text: "v0.9.0".to_string(),
         };
         
         // Создаём кнопки главного меню

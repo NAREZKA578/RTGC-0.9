@@ -6,7 +6,7 @@ fn main() {
     rtgc::utils::logger::init_logger();
 
     eprintln!("========================================");
-    eprintln!("RTGC Starting... v0.8.0");
+    eprintln!("RTGC Starting... v0.9.0");
     eprintln!("========================================");
 
     // Create and run the engine

@@ -466,6 +466,11 @@ impl EcsManager {
     /// 1. Мы валидируем entity_index перед доступом
     /// 2. У нас есть эксклюзивный доступ к self (&mut self)
     /// 3. Мы проверяем что сущность жива
+    /// 
+    /// # Safety
+    /// Вызывающий код должен гарантировать:
+    /// - entity валидна и жива
+    /// - &mut self живёт дольше возвращённого &mut T
     pub fn get_component_mut<T: Component>(&mut self, entity: Entity) -> Option<&mut T> {
         if entity.is_null() || entity.index() >= self.entities.read().len() {
             return None;

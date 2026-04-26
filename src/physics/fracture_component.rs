@@ -145,9 +145,9 @@ impl FractureComponent {
 
             // Add some initial velocity to make fragments fly apart
             fragment_body.velocity += Vector3::new(
-                (rng.gen::<f32>() - 0.5) * 2.0,
-                rng.gen::<f32>(),
-                (rng.gen::<f32>() - 0.5) * 2.0,
+                (rng.r#gen::<f32>() - 0.5) * 2.0,
+                rng.r#gen::<f32>(),
+                (rng.r#gen::<f32>() - 0.5) * 2.0,
             ) * 2.0; // Scale factor for initial velocity
 
             fragments.push(fragment_body);

@@ -263,7 +263,7 @@ impl MissionGenerator {
 
         // Weighted random selection
         let total: f32 = weights.iter().sum();
-        let mut roll = rng.gen::<f32>() * total;
+        let mut roll = rng.r#gen::<f32>() * total;
 
         for (i, candidate) in candidates.iter().enumerate() {
             roll -= weights[i];

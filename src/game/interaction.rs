@@ -1,9 +1,9 @@
-//! Interaction System for RTGC-0.8
+//! Interaction System for RTGC-0.9
 //! Handles player interactions with doors, vehicles, objects, NPCs
 
 use crate::game::inventory::InventoryItem;
 use crate::game::events::{publish_event, GameEvent};
-use crate::physics::physics_module::raycast_world;
+use crate::physics::PhysicsWorld;
 use crate::physics::RaycastHit;
 use crate::physics::{LAYER_INTERACTABLE_DOOR, LAYER_INTERACTABLE_OBJECT, LAYER_INTERACTABLE_VEHICLE};
 use nalgebra::Vector3;
@@ -136,6 +136,7 @@ impl InteractionSystem {
         player_pos: Vector3<f32>,
         player_forward: Vector3<f32>,
         camera_distance: f32,
+        physics_world: &PhysicsWorld,
     ) {
         // Reduce cooldown
         if self.interaction_cooldown > 0.0 {
@@ -147,7 +148,17 @@ impl InteractionSystem {
         let ray_direction = player_forward.normalize();
 
         // Cast ray and find closest interactable
-        let hit = raycast_world(ray_origin, ray_direction, MAX_INTERACTION_DISTANCE);
+        let ray = crate::physics::Ray {
+            origin: ray_origin.into(),
+            direction: ray_direction,
+        };
+        let hit = physics_world.raycast(&ray).and_then(|hit| {
+            if hit.distance <= MAX_INTERACTION_DISTANCE {
+                Some(hit)
+            } else {
+                None
+            }
+        });
 
         self.highlighted = hit.and_then(|h| {
             if h.distance < MAX_INTERACTION_DISTANCE {
@@ -384,11 +395,11 @@ impl InteractionSystem {
             crate::game::player::PlayerState::OnFoot => {
                 // Try to get actual inventory weight if available
                 if let Some(ref inv_arc) = self.inventory {
-                    if let Ok(inv) = inv_arc.lock() {
+                    match inv_arc.lock() { Ok(inv) => {
                         inv.get_total_weight()
-                    } else {
+                    } _ => {
                         0.0
-                    }
+                    }}
                 } else {
                     0.0
                 }

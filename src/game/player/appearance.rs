@@ -47,7 +47,7 @@ impl Appearance {
                 rng.gen_range(0.0..0.4),
                 rng.gen_range(0.0..0.3),
             ],
-            body_build: rng.gen(),
+            body_build: rng.r#gen(),
         }
     }
 

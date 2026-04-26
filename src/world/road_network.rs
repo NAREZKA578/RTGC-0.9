@@ -499,8 +499,8 @@ impl RoadNetwork {
                 RoadType::ForestTrack => 30.0,
             };
             
-            let offset_x = (rng.gen::<f32>() - 0.5) * curve_amount;
-            let offset_z = (rng.gen::<f32>() - 0.5) * curve_amount;
+            let offset_x = (rng.r#gen::<f32>() - 0.5) * curve_amount;
+            let offset_z = (rng.r#gen::<f32>() - 0.5) * curve_amount;
             
             // Sample terrain height and adjust to avoid steep slopes
             let x = base_x + offset_x;

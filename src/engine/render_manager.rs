@@ -57,7 +57,7 @@ impl RenderManager {
         info!(target: "render_manager", "Initializing renderer...");
         
         match &mut self.graphics_context {
-            GraphicsContext::OpenGL(ref mut gl_ctx) => {
+            GraphicsContext::OpenGL(gl_ctx) => {
                 // Создаём свопчейн
                 gl_ctx.create_swapchain(false)?;
                 
@@ -123,7 +123,7 @@ impl RenderManager {
         info!(target: "render_manager", "Resizing to {}x{}", width, height);
         
         match &mut self.graphics_context {
-            GraphicsContext::OpenGL(ref mut gl_ctx) => {
+            GraphicsContext::OpenGL(gl_ctx) => {
                 gl_ctx.on_resize(width, height)?;
                 
                 // Обновляем размеры в рендерере
@@ -143,7 +143,7 @@ impl RenderManager {
             
             // Презент через графический контекст
             match &mut self.graphics_context {
-                GraphicsContext::OpenGL(ref mut gl_ctx) => {
+                GraphicsContext::OpenGL(gl_ctx) => {
                     gl_ctx.present()?;
                 }
             }

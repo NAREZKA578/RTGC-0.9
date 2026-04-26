@@ -3,7 +3,7 @@
 //! Этот модуль предоставляет основной класс `Engine`, который координирует работу всех менеджеров.
 //! Вся специализированная логика вынесена в отдельные менеджеры.
 
-use crate::config::Config;
+use crate::config::{Config, DEFAULT_FRAME_TIME_CLAMP, DEFAULT_TARGET_FPS, DEFAULT_WINDOW_HEIGHT, DEFAULT_WINDOW_WIDTH};
 use crate::engine::game_loop_manager::GameLoopManager;
 use crate::engine::input_manager::InputManagerWrapper;
 use crate::engine::physics_manager::PhysicsManager;
@@ -20,8 +20,8 @@ use crate::graphics::material::MaterialManager;
 use crate::graphics::particles::ParticleSystem;
 use crate::graphics::GraphicsContext;
 use crate::graphics::renderer::DebugRenderer;
-use crate::physics::set_global_physics_world;
 use crate::ui::HudManager;
+use crate::physics::PhysicsWorld;
 use nalgebra::Vector3;
 
 use std::sync::Arc;
@@ -82,38 +82,16 @@ pub struct Engine {
 impl Engine {
     /// Создаёт новый движок
     pub fn new() -> Result<Self, Box<dyn std::error::Error>> {
-        // Try to load config - check multiple possible locations
-        let config_paths = [
-            std::path::Path::new("settings.toml"),
-            std::path::Path::new("assets\\settings\\settings.toml"),
-            std::path::Path::new("..\\settings.toml"),
-            std::path::Path::new("..\\assets\\settings\\settings.toml"),
-        ];
+        // Try to load config from multiple possible locations
+        let config = Self::load_config();
+        tracing::info!(target: "engine", "Config loaded! Backend: {}", config.graphics.backend);
 
-        // Find first existing config file
-        let config_file = config_paths.iter().find(|p| p.exists());
-
-        let config = if let Some(p) = config_file {
-            tracing::info!(target: "engine", "Found config at: {:?}", p);
-            match Config::load(p) {
-                Ok(c) => {
-                    tracing::info!(target: "engine", "Config loaded! Backend: {}", c.graphics.backend);
-                    c
-                }
-                Err(e) => {
-                    tracing::warn!("Config parse error: {}, using default", e);
-                    Config::default()
-                }
-            }
-        } else {
-            tracing::warn!("config.json not found in any location, using default");
-            Config::default()
-        };
+        let physics_timestep = config.physics.timestep;
 
         // Графический контекст будет создан в resumed()
         let graphics_context: Option<GraphicsContext> = None;
 
-// Создание подсистем
+        // Создание подсистем
         let physics_world = crate::physics::PhysicsWorld::new();
         let subsystems = EngineSubsystems::new(
             crate::engine::subsystems::GraphicsSubsystem::new(
@@ -140,9 +118,6 @@ impl Engine {
 
         // Создание менеджеров
         let physics_manager = PhysicsManager::new(subsystems.physics.physics_world.clone());
-
-        // Обновляем глобальный physics_world для raycast
-        set_global_physics_world(&subsystems.physics.physics_world);
 
         let world_manager = WorldManager::new(42);
         let vehicle_manager = VehicleManager::new(Vector3::zeros());
@@ -171,15 +146,53 @@ impl Engine {
             game_state: EngineState::main_menu(),
             last_frame_time: Instant::now(),
             physics_accumulator: 0.0,
-            physics_timestep: 1.0 / 60.0,
+            physics_timestep,
             should_quit: false,
         })
     }
 
+    /// Loads config from multiple possible locations
+    fn load_config() -> Config {
+        use std::path::PathBuf;
+
+        let possible_paths: Vec<PathBuf> = vec![
+            PathBuf::from("settings.toml"),
+            PathBuf::from("config/settings.toml"),
+        ];
+
+        #[cfg(target_os = "windows")]
+        let mut windows_path = dirs::config_dir().unwrap_or_default();
+        #[cfg(target_os = "windows")]
+        {
+            windows_path.push("RTGC");
+            windows_path.push("settings.toml");
+        }
+
+        for path in &possible_paths {
+            if path.exists() {
+                tracing::info!(target: "engine", "Found config at: {:?}", path);
+                if let Ok(config) = Config::load(path) {
+                    return config;
+                }
+            }
+        }
+
+        #[cfg(target_os = "windows")]
+        if windows_path.exists() {
+            tracing::info!(target: "engine", "Found config at: {:?}", windows_path);
+            if let Ok(config) = Config::load(&windows_path) {
+                return config;
+            }
+        }
+
+        tracing::info!(target: "engine", "No config found, using defaults");
+        Config::default()
+    }
+
     /// Запускает движок
     pub fn run(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        info!(target: "engine", "=== RTGC-0.8 ENGINE STARTING ===");
-        info!(target: "engine", "Version: 0.8.0 | Build: Release");
+        info!(target: "engine", "=== RTGC-0.9 ENGINE STARTING ===");
+        info!(target: "engine", "Version: 0.9.0 | Build: Release");
         info!(target: "engine", "Starting engine...");
 
         let event_loop = EventLoop::new()?;
@@ -195,7 +208,7 @@ impl Engine {
         info!(target: "engine", "Event loop created, entering main loop...");
         event_loop.run_app(&mut app)?;
 
-        info!(target: "engine", "=== RTGC-0.8 ENGINE SHUTDOWN ===");
+        info!(target: "engine", "=== RTGC-0.9 ENGINE SHUTDOWN ===");
         Ok(())
     }
 }
@@ -222,8 +235,8 @@ impl ApplicationHandler for GameApp<'_> {
         // For DX11/DX12: create our own window
         // For OpenGL: let GlContext create its own window internally
         let window_attrs = WindowAttributes::default()
-            .with_inner_size(winit::dpi::LogicalSize::new(1280.0, 720.0))
-            .with_title("RTGC-0.8");
+            .with_inner_size(winit::dpi::LogicalSize::new(DEFAULT_WINDOW_WIDTH as f32, DEFAULT_WINDOW_HEIGHT as f32))
+            .with_title("RTGC-0.9");
 
         // Create window only for DX backends
         let window_arc = if backend.to_lowercase().as_str() == "dx11"
@@ -306,11 +319,14 @@ impl ApplicationHandler for GameApp<'_> {
         let hud_manager = self.engine.subsystems.ui.hud_manager.clone();
 
         // Забираем graphics_context из Engine
-        let gc = self
-            .engine
-            .graphics_context
-            .take()
-            .expect("graphics_context not initialized");
+        let gc = match self.engine.graphics_context.take() {
+            Some(gc) => gc,
+            None => {
+                error!(target: "engine", "Graphics context not initialized");
+                event_loop.exit();
+                return;
+            }
+        };
 
         let mut render_manager = RenderManager::new(
             gc,
@@ -446,7 +462,7 @@ impl ApplicationHandler for GameApp<'_> {
                     .duration_since(self.last_frame_time)
                     .as_secs_f32();
                 self.last_frame_time = current_time;
-                let dt = dt.min(0.1);
+                let dt = dt.min(DEFAULT_FRAME_TIME_CLAMP);
 
                 // Обновление
                 if let Err(e) = self.engine.update(dt) {
@@ -543,6 +559,90 @@ impl Engine {
         // Обновление ввода
         self.input_manager.update();
 
+        // Обработка состояния игры
+        self.update_game_state(dt)?;
+
+        // Физический шаг с фиксированным timestep (только если не на паузе)
+        if !self.game_state.is_paused() {
+            self.step_physics(dt);
+        }
+
+        // Синхронизация физики с рендером: передача позиции транспорта в камеру
+        if let Some(vehicle) = self.physics_manager.get_vehicle() {
+            let pos = vehicle.position();
+            let rot = vehicle.rotation();
+            if let Some(ref mut rm) = self.render_manager {
+                rm.set_vehicle_transform(pos, *rot);
+                rm.update_camera_from_vehicle(pos, *rot);
+            }
+        }
+
+        // Синхронизация мира с рендером: освещение, небо, погода
+        self.sync_world_to_render();
+
+        // Обновление мира (только если не на паузе)
+        if !self.game_state.is_paused() {
+            if let Err(e) = self.world_manager.update(dt) {
+                error!(target: "world", "World update error: {:?}", e);
+            }
+        }
+
+        // Обновление игрового цикла
+        let player_position = Some(self.vehicle_manager.get_player_position());
+        let player_forward = self.vehicle_manager.get_player_forward();
+        let physics_world = &self.physics_manager.physics_world;
+        if let Err(e) =
+            self.game_loop_manager
+                .update(dt, &self.game_state, player_position, player_forward, physics_world)
+        {
+            warn!(target: "game", "Game loop update error: {:?}", e);
+        }
+
+        // Обновление подсистем (только если не на паузе)
+        if !self.game_state.is_paused() {
+            self.subsystems.update(dt);
+        }
+
+        Ok(())
+    }
+
+    /// Обновление состояния загрузки
+    fn update_loading(&mut self, dt: f32) -> Result<(), Box<dyn std::error::Error>> {
+        // Увеличиваем прогресс загрузки
+        if let EngineState::Loading { progress, resource_type } = &mut self.game_state {
+            // Имитация загрузки - в реальности здесь будет асинхронная загрузка ресурсов
+            *progress += dt * 0.5; // Загрузка за ~2 секунды
+            
+            if *progress >= 1.0 {
+                *progress = 1.0;
+                info!(target: "engine", "Loading complete, switching to Playing state");
+                
+                // Переход в состояние игры
+                self.game_state = EngineState::playing(0);
+                
+                // Инициализация игрового мира
+                self.initialize_game_world()?;
+            }
+        }
+        
+        Ok(())
+    }
+
+    /// Инициализация игрового мира после загрузки
+    fn initialize_game_world(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        info!(target: "engine", "Initializing game world...");
+        
+// Спавн игрока/транспорта
+        let player_pos = nalgebra::Vector3::new(0.0, 10.0, 0.0);
+        self.vehicle_manager.set_player_position(player_pos);
+        
+        info!(target: "engine", "Game world initialized successfully");
+        
+        Ok(())
+    }
+
+    /// Обновляет состояние игры в зависимости от текущего состояния
+    fn update_game_state(&mut self, dt: f32) -> Result<(), Box<dyn std::error::Error>> {
         // Обработка действий меню в зависимости от состояния
         if self.game_state.is_in_menu() {
             if let Some(ref mut rm) = self.render_manager {
@@ -613,29 +713,22 @@ impl Engine {
                 .set_vehicle_inputs(throttle, steering, brake);
         }
 
-        // Физический шаг с фиксированным timestep (только если не на паузе)
-        if !self.game_state.is_paused() {
-            self.physics_accumulator += dt;
-            while self.physics_accumulator >= self.physics_timestep {
-                if let Err(e) = self.physics_manager.step(self.physics_timestep) {
-                    error!(target: "physics", "Physics step error: {:?}", e);
-                }
-                self.physics_accumulator -= self.physics_timestep;
-            }
-        }
+        Ok(())
+    }
 
-// Синхронизация физики с рендером: передача позиции транспорта в камеру
-        if let Some(vehicle) = self.physics_manager.get_vehicle() {
-            let pos = vehicle.position();
-            let rot = vehicle.rotation();
-            if let Some(ref mut rm) = self.render_manager {
-                rm.set_vehicle_transform(pos, *rot);
-                rm.update_camera_from_vehicle(pos, *rot);
+    /// Выполняет шаг физики с фиксированным timestep
+    fn step_physics(&mut self, dt: f32) {
+        self.physics_accumulator += dt;
+        while self.physics_accumulator >= self.physics_timestep {
+            if let Err(e) = self.physics_manager.step(self.physics_timestep) {
+                error!(target: "physics", "Physics step error: {:?}", e);
             }
+            self.physics_accumulator -= self.physics_timestep;
         }
+    }
 
-        // Синхронизация мира с рендером: освещение, небо, погода
-        let hour = self.world_manager.get_current_hour();
+    /// Синхронизирует мир с рендером: освещение, небо, погода
+    fn sync_world_to_render(&mut self) {
         let sun_dir = self.world_manager.get_day_night_cycle().get_sun_direction();
         let sky_top = self.world_manager.get_day_night_cycle().get_sky_color_top();
         let sky_bottom = self.world_manager.get_day_night_cycle().get_sky_color_horizon();
@@ -643,64 +736,5 @@ impl Engine {
             rm.set_sky_colors(sky_bottom, sky_top);
             rm.set_sun_direction(sun_dir);
         }
-
-        // Обновление мира (только если не на паузе)
-        if !self.game_state.is_paused() {
-            if let Err(e) = self.world_manager.update(dt) {
-                error!(target: "world", "World update error: {:?}", e);
-            }
-        }
-
-// Обновление игрового цикла
-        let player_position = Some(self.vehicle_manager.get_player_position());
-        let player_forward = self.vehicle_manager.get_player_forward();
-        if let Err(e) =
-            self.game_loop_manager
-                .update(dt, &self.game_state, player_position, player_forward)
-        {
-            warn!(target: "game", "Game loop update error: {:?}", e);
-        }
-
-        // Обновление подсистем (только если не на паузе)
-        if !self.game_state.is_paused() {
-            self.subsystems.update(dt);
-        }
-
-        Ok(())
-    }
-
-    /// Обновление состояния загрузки
-    fn update_loading(&mut self, dt: f32) -> Result<(), Box<dyn std::error::Error>> {
-        // Увеличиваем прогресс загрузки
-        if let EngineState::Loading { progress, resource_type } = &mut self.game_state {
-            // Имитация загрузки - в реальности здесь будет асинхронная загрузка ресурсов
-            *progress += dt * 0.5; // Загрузка за ~2 секунды
-            
-            if *progress >= 1.0 {
-                *progress = 1.0;
-                info!(target: "engine", "Loading complete, switching to Playing state");
-                
-                // Переход в состояние игры
-                self.game_state = EngineState::playing(0);
-                
-                // Инициализация игрового мира
-                self.initialize_game_world()?;
-            }
-        }
-        
-        Ok(())
-    }
-
-    /// Инициализация игрового мира после загрузки
-    fn initialize_game_world(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        info!(target: "engine", "Initializing game world...");
-        
-// Спавн игрока/транспорта
-        let player_pos = nalgebra::Vector3::new(0.0, 10.0, 0.0);
-        self.vehicle_manager.set_player_position(player_pos);
-        
-        info!(target: "engine", "Game world initialized successfully");
-        
-        Ok(())
     }
 }

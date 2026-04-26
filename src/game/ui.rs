@@ -1,4 +1,4 @@
-//! UI System for RTGC-0.8
+//! UI System for RTGC-0.9
 //! Handles HUD, menus, tooltips, and all user interface elements
 
 use crate::game::player::{CameraMode, PlayerState};
