@@ -70,7 +70,7 @@ pub struct VertexAttribute {
 }
 
 /// Input layout for vertex shader
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone)]
 pub struct InputLayout {
     pub attributes: Vec<VertexAttribute>,
     pub stride: u32,

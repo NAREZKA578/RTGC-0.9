@@ -23,5 +23,13 @@ pub use factory::*;
 pub use rhi_module::*;
 pub use resource_manager::*;
 pub use gl::{GlDevice, GlCommandQueue, GlCommandList, GlSwapChainInternal, GlFence};
-#[cfg(target_os = "windows")]
-pub use dx11::Dx11Device;
+
+// Re-export types that are used via `crate::graphics::rhi::TypeName` path
+pub use types::{
+    ShaderStage, ShaderDescription, TextureDescription, TextureFormat, TextureType,
+    PipelineStateObject, BufferDescription, BufferType, PrimitiveTopology, RasterizerState,
+    DepthState, ColorBlendState, BlendOp, BlendMode, CompareFunc, CullMode, FrontFace,
+    FillMode, StencilState, ResourceState, TextureUsage, BufferUsage, IndexType,
+    StencilOp, StencilFaceState, DepthStencilState, TextureUsage as TexUsage,
+};
+pub use device::{LoadOp, StoreOp, RenderPassDescription, RenderAttachment, DepthStencilAttachment, IndexFormat};

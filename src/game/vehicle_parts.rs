@@ -2,6 +2,7 @@
 //! Implements detailed component tree for vehicles with damage propagation
 
 use serde::{Deserialize, Serialize};
+use crate::graphics::renderer::commands::RenderCommand;
 
 /// Maximum integrity value (100%)
 pub const MAX_INTEGRITY: f32 = 100.0;
@@ -576,7 +577,7 @@ impl VehiclePartsSystem {
     /// Apply mesh deformation to render command
     pub fn apply_to_render_command(
         &self,
-        command: &mut crate::graphics::renderer::RenderCommand,
+        command: &mut RenderCommand,
         impact_point: &str,
         damage: f32,
     ) {

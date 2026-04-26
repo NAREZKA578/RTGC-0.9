@@ -10,13 +10,18 @@ __pycache__/
 *.a
 *.out
 target/
+dist/
+build/
 
 # Dependencies
 .venv/
 venv/
 node_modules/
-.julia/
-zig-cache/
+.mypy_cache/
+.pytest_cache/
+.coverage
+coverage/
+htmlcov/
 
 # Logs and temp files
 *.log
@@ -32,15 +37,12 @@ zig-cache/
 # Editors
 .vscode/
 .idea/
+*.swp
+*.swo
 
-# OS
+# System
 .DS_Store
 Thumbs.db
-
-# Coverage
-coverage/
-htmlcov/
-.coverage
 
 # Compression
 *.zip
@@ -61,4 +63,8 @@ htmlcov/
 *.Z
 *.lz
 *.lzo
+*.tar.gz
+*.tar.bz2
+*.tar.xz
+*.tar.zst
 ```
