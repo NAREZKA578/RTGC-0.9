@@ -1,6 +1,7 @@
 //! Game Module for RTGC-0.8
 //! Contains gameplay systems: missions, cargo, weather, day/night cycle
 
+pub mod asset_manager;
 pub mod base_builder;
 pub mod cargo;
 pub mod character_creation;
@@ -11,7 +12,6 @@ pub mod first_mission;
 pub mod interaction;
 pub mod inventory;
 pub mod loading_manager;
-pub mod asset_manager;
 pub mod main_menu;
 pub mod map_system;
 pub mod mission_generator;
@@ -29,6 +29,7 @@ pub mod weather;
 pub mod winch;
 
 pub use crate::network::protocol::PlayerInput;
+pub use crate::network::GameState;
 pub use crate::physics::LAYER_PLAYER;
 pub use base_builder::{
     BaseBuildingSystem, BaseCapability, BaseType, BuiltStructure, PlayerBase, ResourceRequirements,
@@ -36,7 +37,10 @@ pub use base_builder::{
     MIN_BASE_DISTANCE,
 };
 pub use cargo::Cargo;
-pub use character_creation::CharacterCreation;
+pub use character_creation::{
+    CharacterCreationData, CharacterCreationManager, CreationStep, EducationOption, Gender,
+    StartLocation, HAIR_COLORS, SKIN_TONES, START_LOCATIONS, UAZ_COLORS,
+};
 pub use debug_menu::DebugMenu;
 pub use economy::{
     calculate_wage, get_base_salary, BuyOrder, ContractJob, EconomySystem, JobBoard, MarketPrice,
@@ -52,6 +56,8 @@ pub use interaction::{
 pub use inventory::{
     Inventory, InventoryItem, InventorySlot, ItemType, MAX_INVENTORY_SLOTS, MAX_INVENTORY_WEIGHT,
 };
+pub use loading_manager::{LoadingManager, LoadingStage, LoadingStateDetailed};
+pub use asset_manager::AssetManager;
 pub use main_menu::{MainMenu, MenuAction, MenuButton, MenuState};
 pub use map_system::{MapMarker, MapSystem, MarkerType};
 pub use mission_generator::{CargoType, Mission, MissionGenerator};
@@ -80,5 +86,5 @@ pub use vehicle_parts::{
     PartCategory, PartDiagnostic, VehiclePart, VehiclePartsSystem, MAX_INTEGRITY,
     MIN_FUNCTIONAL_INTEGRITY,
 };
-pub use weather::WeatherState;
+pub use weather::{PrecipitationType, WeatherState};
 pub use winch::Winch;

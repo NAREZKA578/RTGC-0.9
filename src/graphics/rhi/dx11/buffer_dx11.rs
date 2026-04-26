@@ -12,7 +12,7 @@ use crate::graphics::rhi::RhiResult;
 use windows::{
     Win32::Graphics::Direct3D11::{
         D3D11_BUFFER_DESC, D3D11_MAPPED_SUBRESOURCE,
-        D3D11_MAP_WRITE_DISCARD, D3D11_MAP_READ, D3D11_MAP_WRITE,
+        D3D11_MAP_WRITE_DISCARD,
         D3D11_USAGE_DEFAULT, D3D11_USAGE_DYNAMIC, D3D11_USAGE_IMMUTABLE,
         D3D11_CPU_ACCESS_WRITE, D3D11_CPU_ACCESS_READ,
         D3D11_BIND_VERTEX_BUFFER, D3D11_BIND_INDEX_BUFFER, D3D11_BIND_CONSTANT_BUFFER,
@@ -54,34 +54,34 @@ impl Dx11Buffer {
         // Determine bind flags based on buffer type and usage
         let mut bind_flags = 0u32;
         match desc.buffer_type {
-            BufferType::Vertex => bind_flags |= D3D11_BIND_VERTEX_BUFFER.0 as u32,
-            BufferType::Index => bind_flags |= D3D11_BIND_INDEX_BUFFER.0 as u32,
-            BufferType::Constant => bind_flags |= D3D11_BIND_CONSTANT_BUFFER.0 as u32,
+            BufferType::Vertex => bind_flags |= D3D11_BIND_VERTEX_BUFFER.0,
+            BufferType::Index => bind_flags |= D3D11_BIND_INDEX_BUFFER.0,
+            BufferType::Constant => bind_flags |= D3D11_BIND_CONSTANT_BUFFER.0,
             BufferType::Storage => {
-                bind_flags |= D3D11_BIND_UNORDERED_ACCESS.0 as u32;
+                bind_flags |= D3D11_BIND_UNORDERED_ACCESS.0;
                 if desc.usage.contains(BufferUsage::SHADER_RESOURCE) {
-                    bind_flags |= D3D11_BIND_SHADER_RESOURCE.0 as u32;
+                    bind_flags |= D3D11_BIND_SHADER_RESOURCE.0;
                 }
             }
             BufferType::Indirect => {}
-            BufferType::Uniform => bind_flags |= D3D11_BIND_CONSTANT_BUFFER.0 as u32,
+            BufferType::Uniform => bind_flags |= D3D11_BIND_CONSTANT_BUFFER.0,
         }
         
         // Add additional bind flags from usage
         if desc.usage.contains(BufferUsage::SHADER_RESOURCE) && desc.buffer_type != BufferType::Storage {
-            bind_flags |= D3D11_BIND_SHADER_RESOURCE.0 as u32;
+            bind_flags |= D3D11_BIND_SHADER_RESOURCE.0;
         }
         if desc.usage.contains(BufferUsage::UNORDERED_ACCESS) && desc.buffer_type != BufferType::Storage {
-            bind_flags |= D3D11_BIND_UNORDERED_ACCESS.0 as u32;
+            bind_flags |= D3D11_BIND_UNORDERED_ACCESS.0;
         }
         
         // Determine usage and CPU access flags
         let (usage, cpu_access) = if desc.usage.contains(BufferUsage::DYNAMIC) 
             || desc.usage.contains(BufferUsage::TRANSIENT)
             || desc.usage.contains(BufferUsage::UPLOAD) {
-            (D3D11_USAGE_DYNAMIC, D3D11_CPU_ACCESS_WRITE.0 as u32)
+            (D3D11_USAGE_DYNAMIC, D3D11_CPU_ACCESS_WRITE.0)
         } else if desc.usage.contains(BufferUsage::READBACK) {
-            (D3D11_USAGE_DYNAMIC, (D3D11_CPU_ACCESS_READ.0 | D3D11_CPU_ACCESS_WRITE.0) as u32)
+            (D3D11_USAGE_DYNAMIC, D3D11_CPU_ACCESS_READ.0 | D3D11_CPU_ACCESS_WRITE.0)
         } else if desc.usage.contains(BufferUsage::IMMUTABLE) {
             (D3D11_USAGE_IMMUTABLE, 0)
         } else {
@@ -89,26 +89,26 @@ impl Dx11Buffer {
         };
         
         // Determine misc flags
-        let mut misc_flags: u32 = 0;
+        let mut misc_flags = 0u32;
         if desc.usage.contains(BufferUsage::STORAGE_BUFFER) || desc.buffer_type == BufferType::Storage {
-            misc_flags |= D3D11_RESOURCE_MISC_BUFFER_STRUCTURED.0 as u32;
+            misc_flags |= D3D11_RESOURCE_MISC_BUFFER_STRUCTURED.0;
         }
         
         let buffer_desc = D3D11_BUFFER_DESC {
             ByteWidth: desc.size as u32,
             Usage: usage,
-            BindFlags: D3D11_BIND_FLAG(bind_flags.0),
-            CPUAccessFlags: D3D11_CPU_ACCESS_FLAG(cpu_access.0),
-            MiscFlags: D3D11_RESOURCE_MISC_FLAG(misc_flags.0),
-            StructureByteStride: if misc_flags.0 & D3D11_RESOURCE_MISC_BUFFER_STRUCTURED.0 != 0 {
-                4
+            BindFlags: bind_flags,
+            CPUAccessFlags: cpu_access,
+            MiscFlags: misc_flags,
+            StructureByteStride: if misc_flags & D3D11_RESOURCE_MISC_BUFFER_STRUCTURED.0 != 0 {
+                4 // Default stride for structured buffer, can be customized
             } else {
                 0
             },
         };
         
         info!(target: "dx11.buffer", "Buffer desc: ByteWidth={}, Usage={:?}, BindFlags=0x{:x}, CPUAccess=0x{:x}, MiscFlags=0x{:x}",
-              buffer_desc.ByteWidth, buffer_desc.Usage, buffer_desc.BindFlags.0, buffer_desc.CPUAccessFlags.0, buffer_desc.MiscFlags.0);
+              buffer_desc.ByteWidth, buffer_desc.Usage, buffer_desc.BindFlags, buffer_desc.CPUAccessFlags, buffer_desc.MiscFlags);
         
         // Create buffer
         let buffer = unsafe {
@@ -167,7 +167,6 @@ impl Dx11Buffer {
             size: (data.len() * std::mem::size_of::<T>()) as u64,
             usage: BufferUsage::VERTEX_BUFFER,
             initial_state: ResourceState::VertexBuffer,
-            initial_data: None,
         };
         
         let byte_data = bytemuck::cast_slice::<T, u8>(data);
@@ -187,7 +186,6 @@ impl Dx11Buffer {
             size: (data.len() * 4) as u64,
             usage: BufferUsage::INDEX_BUFFER,
             initial_state: ResourceState::IndexBuffer,
-            initial_data: None,
         };
         
         let byte_data = bytemuck::cast_slice::<u32, u8>(data);
@@ -207,7 +205,6 @@ impl Dx11Buffer {
             size: (data.len() * 2) as u64,
             usage: BufferUsage::INDEX_BUFFER,
             initial_state: ResourceState::IndexBuffer,
-            initial_data: None,
         };
         
         let byte_data = bytemuck::cast_slice::<u16, u8>(data);
@@ -231,7 +228,6 @@ impl Dx11Buffer {
             size: aligned_size,
             usage: BufferUsage::CONSTANT_BUFFER | BufferUsage::DYNAMIC,
             initial_state: ResourceState::ConstantBuffer,
-            initial_data: None,
         };
         
         let byte_data = initial_data.map(|d| bytemuck::bytes_of(d));
@@ -260,7 +256,6 @@ impl Dx11Buffer {
             size: total_size,
             usage: BufferUsage::STORAGE_BUFFER | BufferUsage::SHADER_RESOURCE,
             initial_state: ResourceState::UnorderedAccess,
-            initial_data: None,
         };
         
         let byte_data = data.map(|d| bytemuck::cast_slice::<T, u8>(d));
