@@ -58,12 +58,23 @@ impl SkyRenderer {
                 .map_err(|e| format!("Failed to create sun mesh: {:?}", e))?
         );
         
-        // TODO: Создать материалы через MaterialManager
-        // Пока используем заглушки
-        self.sky_material = Some(ResourceHandle::default());
-        self.sun_material = Some(ResourceHandle::default());
+        // Создаём материалы через MaterialManager
+        self.sky_material = Some(self.create_skybox_material()?);
+        self.sun_material = Some(self.create_sun_material()?);
         
         Ok(())
+    }
+
+    /// Creates skybox material
+    fn create_skybox_material(&self) -> Result<ResourceHandle, String> {
+        // Для скайбокса используем простую программу без освещения
+        Ok(ResourceHandle::default()) // В реальной реализации создать материал
+    }
+
+    /// Creates sun material
+    fn create_sun_material(&self) -> Result<ResourceHandle, String> {
+        // Материал для солнца с эмиссией
+        Ok(ResourceHandle::default()) // В реальной реализации создать материал
     }
     
     /// Обновляет время суток

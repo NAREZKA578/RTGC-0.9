@@ -1,5 +1,10 @@
 //! Inventory system - handles player items and cargo
-//! TODO: Complete implementation
+//! 
+//! Полная реализация системы инвентаря с:
+//! - Подсчётом веса предметов
+//! - Ограничениями по слотам и максимальному весу
+//! - Объединением стаков одинаковых предметов
+//! - Корректным пересчётом веса при удалении части стака
 
 pub const MAX_INVENTORY_SLOTS: usize = 20;
 pub const MAX_INVENTORY_WEIGHT: f32 = 500.0;
@@ -139,13 +144,23 @@ impl Inventory {
             if let Some(item) = slot {
                 if item.id == id {
                     if item.quantity <= quantity {
-                        let removed = slot.take().unwrap();
+                        let removed = slot.take().ok_or("Item not found")?;
                         return Ok(removed);
                     } else {
+                        // Сохраняем вес до изменения количества
+                        let old_weight = item.weight;
+                        let old_quantity = item.quantity;
+                        
+                        // Уменьшаем количество
                         item.quantity -= quantity;
-                        let weight_per_item = item.get_weight() / item.quantity as f32;
-                        item.weight = (item.quantity as f32 - quantity as f32) * weight_per_item;
-                        return Ok(InventoryItem::new(&item.name, quantity, item.item_type.clone()));
+                        
+                        // Пересчитываем вес пропорционально
+                        let weight_per_item = old_weight / old_quantity as f32;
+                        item.weight = item.quantity as f32 * weight_per_item;
+                        
+                        // Возвращаем удалённый предмет с правильным весом
+                        let removed_item = InventoryItem::new(&item.name, quantity, item.item_type.clone());
+                        return Ok(removed_item);
                     }
                 }
             }

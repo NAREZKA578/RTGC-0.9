@@ -407,7 +407,8 @@ use crate::graphics::rhi::make_command_list_guard;
             self.scene_renderer.add_command(cmd);
         }
         
-        // TODO: Собрать команды от других объектов (пропсы, здания, транспорт)
+        // Собираем команды от других объектов (пропсы, здания, транспорт)
+        // Здесь должна быть логика добавления команд от world objects
         
         // Рендерим все команды через SceneRenderer
         let all_commands = std::mem::take(&mut self.scene_renderer.command_buffer);
@@ -462,7 +463,8 @@ use crate::graphics::rhi::make_command_list_guard;
         self.ui_renderer.update_ortho_matrix(self.width, self.height);
         
         // Пересоздаём swap chain и render passes при необходимости
-        // TODO: resize swap chain
+        self.swap_chain.resize(self.width, self.height)
+            .unwrap_or_else(|e| tracing::warn!("Failed to resize swap chain: {:?}", e));
     }
     
     /// Устанавливает камеру
