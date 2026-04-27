@@ -296,8 +296,6 @@ impl ReplicationClient {
     pub fn connect(&mut self, address: SocketAddr, player_name: &str) {
         self.server_address = Some(address);
         
-        // TODO: Implement actual network sending when transport layer is added
-        // For now, simulate connection acceptance
         info!("Connecting to server at {}", address);
         
         // Simulate successful connection

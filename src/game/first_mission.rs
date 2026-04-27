@@ -262,7 +262,12 @@ impl FirstMissionManager {
         if self.mission.state == FirstMissionState::Completed {
             let reward = self.mission.reward_rub;
             self.mission.state = FirstMissionState::Claimed;
-            // TODO: Add money to player wallet - wallet system not implemented
+            
+            // Add money to player wallet using economy system
+            if let Some(ref mut economy) = game_state.economy {
+                economy.wallet.add_rub(reward);
+            }
+            
             Some(reward)
         } else {
             None

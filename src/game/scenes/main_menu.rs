@@ -46,8 +46,8 @@ impl Scene for MainMenuScene {
     }
 
     fn update(&mut self, delta_time: f32) {
-        // TODO: Implement proper input handling
-        // For now, we do nothing to avoid the input manager dependency
+        // Обновляем главное меню
+        self.main_menu.update(delta_time);
     }
 
 fn render(

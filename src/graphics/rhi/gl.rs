@@ -736,7 +736,8 @@ impl ICommandList for GlCommandList {
         let framebuffer = unsafe { self.context.create_framebuffer() }
             .unwrap_or_else(|_| {
                 tracing::error!(target: "rhi", "Failed to create framebuffer, using default");
-                glow::NativeFramebuffer(NonZeroU32::new(1).unwrap())
+                // SAFETY: NonZeroU32::new(1) is guaranteed to succeed as 1 != 0
+                glow::NativeFramebuffer(NonZeroU32::new(1).expect("1 is non-zero"))
             });
 
         unsafe {
@@ -837,7 +838,8 @@ impl ICommandList for GlCommandList {
             unsafe {
                 let gl_buffer = NativeBuffer(NonZeroU32::new(buffer_handle.0 as u32).unwrap_or_else(|| {
                     tracing::warn!("Invalid buffer handle {}", buffer_handle.0);
-                    NonZeroU32::new(1).unwrap()
+                    // SAFETY: 1 is guaranteed to be non-zero
+                    NonZeroU32::new(1).expect("1 is non-zero")
                 }));
                 self.context.bind_buffer(glow::ARRAY_BUFFER, Some(gl_buffer));
 
@@ -858,7 +860,8 @@ impl ICommandList for GlCommandList {
         unsafe {
             let gl_buffer = NativeBuffer(NonZeroU32::new(buffer.0 as u32).unwrap_or_else(|| {
                 tracing::warn!("Invalid index buffer handle {}", buffer.0);
-                NonZeroU32::new(1).unwrap()
+                // SAFETY: 1 is guaranteed to be non-zero
+                NonZeroU32::new(1).expect("1 is non-zero")
             }));
             self.context.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, Some(gl_buffer));
         }
@@ -868,7 +871,8 @@ impl ICommandList for GlCommandList {
         unsafe {
             let gl_buffer = NativeBuffer(NonZeroU32::new(buffer.0 as u32).unwrap_or_else(|| {
                 tracing::warn!("Invalid constant buffer handle {}", buffer.0);
-                NonZeroU32::new(1).unwrap()
+                // SAFETY: 1 is guaranteed to be non-zero
+                NonZeroU32::new(1).expect("1 is non-zero")
             }));
             self.context.bind_buffer_range(
                 glow::UNIFORM_BUFFER,
@@ -890,7 +894,8 @@ impl ICommandList for GlCommandList {
         unsafe {
             let gl_sampler = NativeSampler(NonZeroU32::new(sampler.0 as u32).unwrap_or_else(|| {
                 tracing::warn!("Invalid sampler handle {}", sampler.0);
-                NonZeroU32::new(1).unwrap()
+                // SAFETY: 1 is guaranteed to be non-zero
+                NonZeroU32::new(1).expect("1 is non-zero")
             }));
             self.context.bind_sampler(slot, Some(gl_sampler));
         }
@@ -940,7 +945,8 @@ impl ICommandList for GlCommandList {
         unsafe {
             let gl_buffer = NativeBuffer(NonZeroU32::new(buffer.0 as u32).unwrap_or_else(|| {
                 tracing::warn!("Invalid indirect buffer handle {}", buffer.0);
-                NonZeroU32::new(1).unwrap()
+                // SAFETY: 1 is guaranteed to be non-zero
+                NonZeroU32::new(1).expect("1 is non-zero")
             }));
             self.context.bind_buffer(glow::DRAW_INDIRECT_BUFFER, Some(gl_buffer));
             for i in 0..draw_count {
@@ -960,7 +966,8 @@ impl ICommandList for GlCommandList {
         unsafe {
             let gl_buffer = NativeBuffer(NonZeroU32::new(buffer.0 as u32).unwrap_or_else(|| {
                 tracing::warn!("Invalid indexed indirect buffer handle {}", buffer.0);
-                NonZeroU32::new(1).unwrap()
+                // SAFETY: 1 is guaranteed to be non-zero
+                NonZeroU32::new(1).expect("1 is non-zero")
             }));
             self.context.bind_buffer(glow::DRAW_INDIRECT_BUFFER, Some(gl_buffer));
             for i in 0..draw_count {
@@ -988,7 +995,8 @@ impl ICommandList for GlCommandList {
         unsafe {
             let gl_buffer = NativeBuffer(NonZeroU32::new(buffer.0 as u32).unwrap_or_else(|| {
                 tracing::warn!("Invalid dispatch indirect buffer handle {}", buffer.0);
-                NonZeroU32::new(1).unwrap()
+                // SAFETY: 1 is guaranteed to be non-zero
+                NonZeroU32::new(1).expect("1 is non-zero")
             }));
             self.context.bind_buffer(glow::DISPATCH_INDIRECT_BUFFER, Some(gl_buffer));
             self.context.dispatch_compute_indirect(offset as i32);

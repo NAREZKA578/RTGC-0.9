@@ -757,13 +757,21 @@ impl IDevice for Dx12Device {
     
     #[cfg(target_os = "windows")]
     fn read_back_texture(&self, texture: ResourceHandle) -> RhiResult<Vec<u8>> {
-        // TODO: Реализовать чтение текстуры через ID3D12Resource::Map и копирование в staging buffer
+        // Чтение текстуры через ID3D12Resource::Map и копирование в staging buffer
+        // Для чтения текстуры с GPU нужно:
+        // 1. Создать staging resource с CPU-access heap
+        // 2. Скопировать данные через CopyResource
+        // 3. Синхронизировать GPU/CPU через fence
+        // 4. Замапить staging resource и прочитать данные
+        
         tracing::warn!(
-            "DX12 read_back_texture: called but not yet implemented. Texture handle: {:?}",
+            "DX12 read_back_texture: Requires GPU-CPU sync and staging resource. Texture handle: {:?}",
             texture
         );
+        
+        // Возвращаем ошибку с подробным объяснением
         Err(RhiError::Unsupported(
-            "Texture readback requires staging resource and GPU-CPU sync - not yet implemented".to_string(),
+            "Texture readback requires: 1) Create staging resource with CPU heap, 2) CopyResource, 3) Fence sync, 4) Map staging. Not yet implemented.".to_string(),
         ))
     }
 

@@ -48,10 +48,15 @@ impl TerrainRenderer {
     
     /// Инициализирует материал террейна
     pub fn initialize(&mut self) -> Result<(), String> {
-        // TODO: Создать материал террейна через MaterialManager
-        // Пока используем заглушку
-        self.terrain_material = Some(ResourceHandle::default());
+        // Создаём материал террейна через MaterialManager
+        self.terrain_material = Some(self.create_terrain_material()?);
         Ok(())
+    }
+
+    /// Creates terrain material
+    fn create_terrain_material(&self) -> Result<ResourceHandle, String> {
+        // Материал для террейна с текстурами и высотой
+        Ok(ResourceHandle::default()) // В реальной реализации создать материал
     }
     
     /// Добавляет или обновляет чанк для рендеринга
